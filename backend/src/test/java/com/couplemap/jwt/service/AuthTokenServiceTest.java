@@ -140,7 +140,6 @@ class AuthTokenServiceTest {
         String authHeader = "Bearer " + refreshToken;
         
         given(tokenExtractor.extractToken(authHeader)).willReturn(refreshToken);
-        given(jwtUtil.getCategory(refreshToken)).willReturn("refresh");
         given(jwtUtil.isExpired(refreshToken)).willReturn(true); // 만료됨!
 
         // when & then
