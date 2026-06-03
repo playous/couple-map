@@ -90,15 +90,15 @@ public class AuthTokenServiceImpl implements AuthTokenService {
 
 
     private void validateRefreshToken(String refreshToken) {
+        // 만료 시간 확인
+        if (jwtUtil.isExpired(refreshToken)) {
+            throw new JwtException(JWT_REFRESH_TOKEN_EXPIRED);
+        }
+
         // 카테고리 확인
         String category = jwtUtil.getCategory(refreshToken);
         if (!"refresh".equals(category)) {
             throw new JwtException(JWT_INVALID_TOKEN_TYPE);
-        }
-
-        // 만료 시간 확인
-        if (jwtUtil.isExpired(refreshToken)) {
-            throw new JwtException(JWT_REFRESH_TOKEN_EXPIRED);
         }
 
         // 로그아웃한 사용자인지 확인
