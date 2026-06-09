@@ -29,7 +29,6 @@ class _MapMemberListScreenState extends ConsumerState<MapMemberListScreen> {
     if (auth is! AuthSuccess) return;
     try {
       final members = await ref.read(mapRepositoryProvider).getMapMembers(
-        auth.token.accessToken,
         widget.mapId,
       );
       if (mounted) setState(() { _members = members; _isLoading = false; });

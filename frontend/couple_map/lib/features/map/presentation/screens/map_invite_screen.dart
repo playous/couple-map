@@ -33,7 +33,7 @@ class _MapInviteScreenState extends ConsumerState<MapInviteScreen> {
       return;
     }
     try {
-      final friends = await ref.read(friendRepositoryProvider).getFriendList(auth.token.accessToken);
+      final friends = await ref.read(friendRepositoryProvider).getFriendList();
       if (mounted) setState(() { _friends = friends; _isLoading = false; });
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
@@ -44,7 +44,7 @@ class _MapInviteScreenState extends ConsumerState<MapInviteScreen> {
     final auth = ref.read(authProvider);
     if (auth is! AuthSuccess) return;
     try {
-      await ref.read(mapRepositoryProvider).inviteFriendToMap(auth.token.accessToken, widget.mapId, friendId);
+      await ref.read(mapRepositoryProvider).inviteFriendToMap(widget.mapId, friendId);
       if (!mounted) return;
       setState(() => _invitedIds.add(friendId));
       if (mounted) {

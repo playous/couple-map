@@ -179,13 +179,13 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     if (auth is! AuthSuccess) return;
     setState(() => _isSaving = true);
     try {
-      final updatedNickname = await ref.read(mypageRepositoryProvider).updateNickname(auth.token.accessToken, nickname);
+      final updatedNickname = await ref.read(mypageRepositoryProvider).updateNickname(nickname);
       String? updatedImageUrl = widget.user.profileImageUrl;
       if (_resetToDefault) {
-        await ref.read(mypageRepositoryProvider).deleteProfileImage(auth.token.accessToken);
+        await ref.read(mypageRepositoryProvider).deleteProfileImage();
         updatedImageUrl = null;
       } else if (_pickedImage != null) {
-        updatedImageUrl = await ref.read(mypageRepositoryProvider).uploadProfileImage(auth.token.accessToken, _pickedImage!);
+        updatedImageUrl = await ref.read(mypageRepositoryProvider).uploadProfileImage(_pickedImage!);
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

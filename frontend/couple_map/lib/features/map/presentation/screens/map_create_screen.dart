@@ -115,7 +115,6 @@ class _MapCreateScreenState extends ConsumerState<MapCreateScreen> {
       }
 
       final mapId = await ref.read(homeRepositoryProvider).createMap(
-        auth.token.accessToken,
         name,
         description.isNotEmpty ? description : null,
         _categoryLabel(_selectedCategory),

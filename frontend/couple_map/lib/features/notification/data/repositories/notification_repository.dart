@@ -3,17 +3,11 @@ import '../../../../core/network/dio_client.dart';
 import '../models/notification_model.dart';
 
 class NotificationRepository {
-  Future<List<NotificationModel>> getNotifications(String accessToken) async {
+  Future<List<NotificationModel>> getNotifications() async {
     try {
       final results = await Future.wait([
-        DioClient.instance.get(
-          '/api/friend/list/pending',
-          options: DioClient.authOptions(accessToken),
-        ),
-        DioClient.instance.get(
-          '/api/map/invitations',
-          options: DioClient.authOptions(accessToken),
-        ),
+        DioClient.instance.get('/api/friend/list/pending'),
+        DioClient.instance.get('/api/map/invitations'),
       ]);
 
       final friendData =

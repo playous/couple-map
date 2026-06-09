@@ -6,12 +6,9 @@ import '../models/map_card_model.dart';
 
 class HomeRepository {
   // 지도 목록 조회
-  Future<List<MapCardModel>> getMapList(String accessToken) async {
+  Future<List<MapCardModel>> getMapList() async {
     try {
-      final response = await DioClient.instance.get(
-        '/api/map',
-        options: DioClient.authOptions(accessToken),
-      );
+      final response = await DioClient.instance.get('/api/map');
       final data = response.data['data'] as List;
       return data.map((json) => MapCardModel.fromJson(json as Map<String, dynamic>)).toList();
     } on DioException catch (e) {
@@ -21,7 +18,6 @@ class HomeRepository {
 
   // 지도 생성 (multipart/form-data)
   Future<int> createMap(
-    String accessToken,
     String mapName,
     String? description,
     String category, [
@@ -44,10 +40,7 @@ class HomeRepository {
       final response = await DioClient.instance.post(
         '/api/map',
         data: formData,
-        options: Options(
-          headers: {'Authorization': 'Bearer $accessToken'},
-          contentType: 'multipart/form-data',
-        ),
+        options: Options(contentType: 'multipart/form-data'),
       );
       return response.data['data'] as int;
     } on DioException catch (e) {

@@ -56,7 +56,7 @@ class _MapSettingsScreenState extends ConsumerState<MapSettingsScreen> {
     final auth = ref.read(authProvider);
     if (auth is! AuthSuccess) return;
     try {
-      await ref.read(mapRepositoryProvider).deleteMap(auth.token.accessToken, widget.mapId);
+      await ref.read(mapRepositoryProvider).deleteMap(widget.mapId);
       if (mounted) context.go('/home');
     } catch (e) {
       if (mounted) {

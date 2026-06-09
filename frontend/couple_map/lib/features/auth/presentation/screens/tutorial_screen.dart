@@ -4,9 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../common/widgets/primary_button.dart';
 
 class TutorialScreen extends StatefulWidget {
-  final String accessToken;
-
-  const TutorialScreen({super.key, required this.accessToken});
+  const TutorialScreen({super.key});
 
   @override
   State<TutorialScreen> createState() => _TutorialScreenState();
@@ -41,7 +39,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
   }
 
   void _goToTerms() {
-    context.go('/terms', extra: widget.accessToken);
+    context.go('/terms');
   }
 
   @override

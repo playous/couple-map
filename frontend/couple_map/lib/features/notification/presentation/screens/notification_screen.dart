@@ -8,9 +8,7 @@ import '../../../../core/network/dio_client.dart';
 import '../../../friend/domain/providers/friend_provider.dart';
 
 class NotificationScreen extends ConsumerStatefulWidget {
-  final String accessToken;
-
-  const NotificationScreen({super.key, required this.accessToken});
+  const NotificationScreen({super.key});
 
   @override
   ConsumerState<NotificationScreen> createState() => _NotificationScreenState();
@@ -21,7 +19,7 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(notificationProvider.notifier).load(widget.accessToken);
+      ref.read(notificationProvider.notifier).load();
     });
   }
 
@@ -30,17 +28,14 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
     try {
       if (friendshipId != null) {
         if (accepted) {
-          await ref.read(friendRepositoryProvider).acceptFriendRequest(widget.accessToken, friendshipId);
+          await ref.read(friendRepositoryProvider).acceptFriendRequest(friendshipId);
         } else {
-          await ref.read(friendRepositoryProvider).rejectFriendRequest(widget.accessToken, friendshipId);
+          await ref.read(friendRepositoryProvider).rejectFriendRequest(friendshipId);
         }
       } else if (mapMemberId != null) {
         final action = accepted ? 'accept' : 'reject';
         try {
-          await DioClient.instance.post(
-            '/api/map/member/$mapMemberId/$action',
-            options: DioClient.authOptions(widget.accessToken),
-          );
+          await DioClient.instance.post('/api/map/member/$mapMemberId/$action');
         } on DioException catch (e) {
           throw DioClient.handleError(e);
         }

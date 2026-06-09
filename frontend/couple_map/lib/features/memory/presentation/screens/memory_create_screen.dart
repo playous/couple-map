@@ -255,7 +255,6 @@ class _MemoryCreateScreenState extends ConsumerState<MemoryCreateScreen> {
         ..._selectedAudio,
       ];
       await ref.read(memoryRepositoryProvider).createMemory(
-        auth.token.accessToken,
         widget.mapId,
         requestData,
         allFiles.isNotEmpty ? allFiles : null,

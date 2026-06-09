@@ -48,7 +48,6 @@ class _MemoryDetailOverlayState extends ConsumerState<_MemoryDetailOverlay> {
     if (auth is! AuthSuccess) return;
     try {
       final memory = await ref.read(memoryRepositoryProvider).getMemoryDetail(
-        auth.token.accessToken,
         widget.mapId,
         widget.memoryId,
       );
@@ -79,7 +78,6 @@ class _MemoryDetailOverlayState extends ConsumerState<_MemoryDetailOverlay> {
     if (auth is! AuthSuccess) return;
     try {
       await ref.read(memoryRepositoryProvider).deleteMemory(
-        auth.token.accessToken,
         widget.mapId,
         widget.memoryId,
       );

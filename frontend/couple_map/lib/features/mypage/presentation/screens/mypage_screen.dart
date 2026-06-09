@@ -44,9 +44,9 @@ class MypageScreenState extends ConsumerState<MypageScreen> {
       if (token == null) return;
 
       final results = await Future.wait([
-        ref.read(mypageRepositoryProvider).getUserInfo(token),
-        ref.read(homeRepositoryProvider).getMapList(token),
-        ref.read(friendRepositoryProvider).getFriendList(token),
+        ref.read(mypageRepositoryProvider).getUserInfo(),
+        ref.read(homeRepositoryProvider).getMapList(),
+        ref.read(friendRepositoryProvider).getFriendList(),
       ]);
 
       if (mounted) {
@@ -64,8 +64,7 @@ class MypageScreenState extends ConsumerState<MypageScreen> {
 
   Future<void> _logout() async {
     try {
-      final token = await _getToken();
-      if (token != null) await ref.read(authRepositoryProvider).logout(token);
+      await ref.read(authRepositoryProvider).logout();
     } catch (_) {}
     ref.read(authProvider.notifier).reset();
     widget.onLogout?.call();
@@ -123,11 +122,8 @@ class MypageScreenState extends ConsumerState<MypageScreen> {
     if (secondConfirm != true) return;
 
     try {
-      final token = await _getToken();
-      if (token != null) {
-        await ref.read(mypageRepositoryProvider).deleteAccount(token);
-        await ref.read(authRepositoryProvider).clearToken();
-      }
+      await ref.read(mypageRepositoryProvider).deleteAccount();
+      await ref.read(authRepositoryProvider).clearToken();
     } catch (_) {}
     if (mounted) {
       ref.read(authProvider.notifier).reset();

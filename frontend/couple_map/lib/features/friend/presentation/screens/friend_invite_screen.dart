@@ -37,7 +37,7 @@ class _FriendInviteSheetState extends ConsumerState<FriendInviteSheet> {
     if (auth is! AuthSuccess) return;
     setState(() => _isSending = true);
     try {
-      await ref.read(friendRepositoryProvider).sendFriendRequest(auth.token.accessToken, code);
+      await ref.read(friendRepositoryProvider).sendFriendRequest(code);
       if (mounted) {
         Navigator.pop(context);
         widget.onAdded?.call();

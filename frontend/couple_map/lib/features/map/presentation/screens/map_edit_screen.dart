@@ -79,7 +79,6 @@ class _MapEditScreenState extends ConsumerState<MapEditScreen> {
     if (auth is! AuthSuccess) return;
     try {
       final map = await ref.read(mapRepositoryProvider).getMapDetail(
-        auth.token.accessToken,
         widget.mapId,
       );
       if (mounted) {
@@ -182,7 +181,6 @@ class _MapEditScreenState extends ConsumerState<MapEditScreen> {
       }
 
       await ref.read(mapRepositoryProvider).updateMap(
-        auth.token.accessToken,
         widget.mapId,
         name,
         description.isNotEmpty ? description : null,

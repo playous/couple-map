@@ -45,12 +45,9 @@ class FriendPendingInfo {
 }
 
 class FriendRepository {
-  Future<List<FriendInfo>> getFriendList(String accessToken) async {
+  Future<List<FriendInfo>> getFriendList() async {
     try {
-      final response = await DioClient.instance.get(
-        '/api/friend/list',
-        options: DioClient.authOptions(accessToken),
-      );
+      final response = await DioClient.instance.get('/api/friend/list');
       final data = response.data['data']['friendList'] as List;
       return data.map((j) => FriendInfo.fromJson(j as Map<String, dynamic>)).toList();
     } on DioException catch (e) {
@@ -58,12 +55,9 @@ class FriendRepository {
     }
   }
 
-  Future<List<FriendPendingInfo>> getPendingFriendList(String accessToken) async {
+  Future<List<FriendPendingInfo>> getPendingFriendList() async {
     try {
-      final response = await DioClient.instance.get(
-        '/api/friend/list/pending',
-        options: DioClient.authOptions(accessToken),
-      );
+      final response = await DioClient.instance.get('/api/friend/list/pending');
       final data = response.data['data']['friendPendingInfoDtoList'] as List;
       return data.map((j) => FriendPendingInfo.fromJson(j as Map<String, dynamic>)).toList();
     } on DioException catch (e) {
@@ -71,35 +65,28 @@ class FriendRepository {
     }
   }
 
-  Future<void> sendFriendRequest(String accessToken, String friendCode) async {
+  Future<void> sendFriendRequest(String friendCode) async {
     try {
       await DioClient.instance.post(
         '/api/friend/request',
         data: {'friendCode': friendCode},
-        options: DioClient.authOptions(accessToken),
       );
     } on DioException catch (e) {
       throw DioClient.handleError(e);
     }
   }
 
-  Future<void> acceptFriendRequest(String accessToken, int friendshipId) async {
+  Future<void> acceptFriendRequest(int friendshipId) async {
     try {
-      await DioClient.instance.post(
-        '/api/friend/$friendshipId/accept',
-        options: DioClient.authOptions(accessToken),
-      );
+      await DioClient.instance.post('/api/friend/$friendshipId/accept');
     } on DioException catch (e) {
       throw DioClient.handleError(e);
     }
   }
 
-  Future<void> rejectFriendRequest(String accessToken, int friendshipId) async {
+  Future<void> rejectFriendRequest(int friendshipId) async {
     try {
-      await DioClient.instance.post(
-        '/api/friend/$friendshipId/reject',
-        options: DioClient.authOptions(accessToken),
-      );
+      await DioClient.instance.post('/api/friend/$friendshipId/reject');
     } on DioException catch (e) {
       throw DioClient.handleError(e);
     }

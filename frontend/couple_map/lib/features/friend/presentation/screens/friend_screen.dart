@@ -30,11 +30,10 @@ class _FriendScreenState extends ConsumerState<FriendScreen> {
   Future<void> _loadData() async {
     final auth = ref.read(authProvider);
     if (auth is! AuthSuccess) return;
-    final token = auth.token.accessToken;
     try {
       final results = await Future.wait([
-        ref.read(friendRepositoryProvider).getFriendList(token),
-        ref.read(mypageRepositoryProvider).getUserInfo(token),
+        ref.read(friendRepositoryProvider).getFriendList(),
+        ref.read(mypageRepositoryProvider).getUserInfo(),
       ]);
       if (mounted) {
         setState(() {
