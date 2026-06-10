@@ -5,6 +5,6 @@ import '../../data/repositories/home_repository.dart';
 final homeRepositoryProvider = Provider<HomeRepository>((_) => HomeRepository());
 
 // 지도 목록 상태
-final mapListProvider = FutureProvider.family<List<MapCardModel>, String>(
-  (ref, accessToken) => ref.read(homeRepositoryProvider).getMapList(accessToken),
+final mapListProvider = FutureProvider<List<MapCardModel>>(
+  (ref) => ref.read(homeRepositoryProvider).getMapList(),
 );

@@ -76,7 +76,6 @@ class _MemoryEditScreenState extends ConsumerState<MemoryEditScreen> {
     if (auth is! AuthSuccess) return;
     try {
       final memory = await ref.read(memoryRepositoryProvider).getMemoryDetail(
-        auth.token.accessToken,
         widget.mapId,
         widget.memoryId,
       );
@@ -198,7 +197,6 @@ class _MemoryEditScreenState extends ConsumerState<MemoryEditScreen> {
       ];
 
       await ref.read(memoryRepositoryProvider).updateMemory(
-        auth.token.accessToken,
         widget.mapId,
         widget.memoryId,
         requestData,

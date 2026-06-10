@@ -62,8 +62,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (token == null) throw '로그인 정보가 없습니다.';
 
       final results = await Future.wait([
-        ref.read(mypageRepositoryProvider).getUserInfo(token),
-        ref.read(homeRepositoryProvider).getMapList(token),
+        ref.read(mypageRepositoryProvider).getUserInfo(),
+        ref.read(homeRepositoryProvider).getMapList(),
       ]);
 
       if (mounted) {
@@ -83,10 +83,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  Future<void> _openNotifications() async {
-    final token = await _getToken();
-    if (!mounted || token == null) return;
-    context.push('/notifications', extra: token);
+  void _openNotifications() {
+    context.push('/notifications');
   }
 
   Future<void> _openMapCreate() async {

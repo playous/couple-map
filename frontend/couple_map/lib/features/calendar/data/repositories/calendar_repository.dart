@@ -40,7 +40,6 @@ class CalendarRepository {
   final Map<int, List<CalendarMemory>> _cache = {};
 
   Future<List<CalendarMemory>> getCalendarMemories(
-    String accessToken,
     int year, {
     bool forceRefresh = false,
   }) async {
@@ -52,7 +51,6 @@ class CalendarRepository {
       final response = await DioClient.instance.get(
         '/api/calendar/memories',
         queryParameters: {'year': year},
-        options: DioClient.authOptions(accessToken),
       );
       final list = (response.data['data'] as List? ?? [])
           .map((e) => CalendarMemory.fromJson(e as Map<String, dynamic>))

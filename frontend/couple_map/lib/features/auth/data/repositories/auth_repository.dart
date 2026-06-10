@@ -86,12 +86,11 @@ class AuthRepository {
 
   // ── 닉네임 설정 ──────────────────────────────────────────────
 
-  Future<void> setNickname(String accessToken, String nickname) async {
+  Future<void> setNickname(String nickname) async {
     try {
       await DioClient.instance.post(
         '/api/users/nickname',
         data: {'nickname': nickname},
-        options: DioClient.authOptions(accessToken),
       );
     } on DioException catch (e) {
       throw DioClient.handleError(e);
@@ -100,12 +99,9 @@ class AuthRepository {
 
   // ── 로그아웃 ──────────────────────────────────────────────────
 
-  Future<void> logout(String accessToken) async {
+  Future<void> logout() async {
     try {
-      await DioClient.instance.post(
-        '/api/auth/logout',
-        options: DioClient.authOptions(accessToken),
-      );
+      await DioClient.instance.post('/api/auth/logout');
     } on DioException catch (_) {
       // 로그아웃은 서버 실패해도 로컬 토큰 삭제
     } finally {

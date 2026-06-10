@@ -50,7 +50,7 @@ class _MemoryListScreenState extends ConsumerState<MemoryListScreen> {
     try {
       final result = await ref
           .read(memoryRepositoryProvider)
-          .getMemoryList(auth.token.accessToken, widget.mapId, page: 0);
+          .getMemoryList(widget.mapId, page: 0);
       if (mounted) {
         setState(() {
           _memories = result.items;
@@ -71,7 +71,7 @@ class _MemoryListScreenState extends ConsumerState<MemoryListScreen> {
     try {
       final result = await ref
           .read(memoryRepositoryProvider)
-          .getMemoryList(auth.token.accessToken, widget.mapId, page: _currentPage + 1);
+          .getMemoryList(widget.mapId, page: _currentPage + 1);
       if (mounted) {
         setState(() {
           _memories.addAll(result.items);

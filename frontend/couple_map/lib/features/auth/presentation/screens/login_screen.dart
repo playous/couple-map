@@ -22,7 +22,7 @@ class LoginScreen extends ConsumerWidget {
           if (token.nicknameSet) {
             context.go('/home');
           } else {
-            context.push('/tutorial', extra: token.accessToken);
+            context.push('/tutorial');
           }
         });
       } else if (next is AuthError) {

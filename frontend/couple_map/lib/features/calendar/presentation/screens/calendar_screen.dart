@@ -65,7 +65,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
       final calendarRepo = ref.read(calendarRepositoryProvider);
       final memories = await calendarRepo.getCalendarMemories(
-        token,
         _currentMonth.year,
         forceRefresh: forceRefresh,
       );
