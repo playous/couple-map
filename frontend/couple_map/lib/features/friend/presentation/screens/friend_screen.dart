@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../auth/domain/providers/auth_provider.dart';
 import '../../../auth/data/models/user_model.dart';
 import '../../../mypage/domain/providers/mypage_provider.dart';
 import '../../data/repositories/friend_repository.dart';
@@ -28,8 +27,6 @@ class _FriendScreenState extends ConsumerState<FriendScreen> {
   }
 
   Future<void> _loadData() async {
-    final auth = ref.read(authProvider);
-    if (auth is! AuthSuccess) return;
     try {
       final results = await Future.wait([
         ref.read(friendRepositoryProvider).getFriendList(),
