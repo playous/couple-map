@@ -124,10 +124,16 @@ class MypageScreenState extends ConsumerState<MypageScreen> {
     try {
       await ref.read(mypageRepositoryProvider).deleteAccount();
       await ref.read(authRepositoryProvider).clearToken();
-    } catch (_) {}
-    if (mounted) {
-      ref.read(authProvider.notifier).reset();
-      widget.onLogout?.call();
+      if (mounted) {
+        ref.read(authProvider.notifier).reset();
+        widget.onLogout?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('회원 탈퇴에 실패했어요: ${e.toString()}')),
+        );
+      }
     }
   }
 
