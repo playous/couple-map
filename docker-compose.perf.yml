@@ -1,0 +1,58 @@
+name: vestige
+
+# 성능 테스트 전용 Docker Compose
+# 모니터링 스택 (Prometheus + InfluxDB + Grafana) + Redis
+# Spring Boot는 로컬(IDE/CLI)에서 직접 실행
+
+services:
+
+  # ── Redis (Spring Boot 캐시·세션) ──────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── InfluxDB 1.8 (k6 메트릭 수신) ────────────────────────
+  influxdb:
+    image: influxdb:1.8
+    ports:
+      - "8086:8086"
+    environment:
+      INFLUXDB_DB: k6
+      INFLUXDB_HTTP_AUTH_ENABLED: "false"
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+
+  # ── Prometheus (Spring Boot Actuator 스크랩) ─────────────
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=24h"
+
+  # ── Grafana (대시보드) ────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - influxdb
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  influxdb_data:
+  grafana_data:
