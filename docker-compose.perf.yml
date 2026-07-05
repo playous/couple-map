@@ -30,7 +30,7 @@ services:
 
   # ── Prometheus (Spring Boot Actuator 스크랩) ─────────────
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.10.0
     ports:
       - "9090:9090"
     volumes:
@@ -41,7 +41,7 @@ services:
 
   # ── Grafana (대시보드) ────────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.4.1
     ports:
       - "3000:3000"
     environment:
