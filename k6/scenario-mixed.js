@@ -119,6 +119,7 @@ export const options = {
     'http_req_duration{name:GET_memory_detail}':  ['p(95)<100'],
     'http_req_duration{name:GET_map_detail}':     ['p(95)<100'],
     'http_req_duration{name:GET_calendar}':       ['p(95)<100'],
+    'http_req_duration{name:GET_user_me}':        ['p(95)<100'],
     // 일반 쓰기 p95 < 300ms
     'http_req_duration{name:POST_memory_text}':   ['p(95)<300'],
     // 업로드 p95 < 500ms
@@ -147,11 +148,10 @@ export function setup() {
   for (let i = 0; i < MAP_VUS; i++) {
     const token = tokens[MAP_TOKEN_OFFSET + i];
     const res = http.get(`${BASE_URL}/api/map`, { headers: authHeaders(token) });
-    if (res.status === 200) {
-      mapSnapshots[MAP_USER_START + i] = JSON.parse(res.body).data.map(m => m.mapId);
-    } else {
-      mapSnapshots[MAP_USER_START + i] = [];
+    if (res.status !== 200) {
+      throw new Error(`맵 스냅샷 실패 (user ${MAP_USER_START + i}): status ${res.status}`);
     }
+    mapSnapshots[MAP_USER_START + i] = JSON.parse(res.body).data.map(m => m.mapId);
   }
 
   return { tokens, mapSnapshots };
@@ -335,10 +335,9 @@ export function teardown({ tokens, mapSnapshots }) {
 
 function deleteAllMemories(mapId, token) {
   const h = authHeaders(token);
-  let page = 0;
   while (true) {
     const res = http.get(
-      `${BASE_URL}/api/maps/${mapId}/memories?page=${page}&size=100`,
+      `${BASE_URL}/api/maps/${mapId}/memories?page=0&size=100`,
       { headers: h }
     );
     if (res.status !== 200) break;
@@ -348,8 +347,6 @@ function deleteAllMemories(mapId, token) {
     for (const mem of memories) {
       http.del(`${BASE_URL}/api/maps/${mapId}/memories/${mem.memoryId}`, null, { headers: h });
     }
-    if (body.last) break;
-    page++;
   }
 }
 
