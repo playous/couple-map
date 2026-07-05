@@ -52,6 +52,8 @@ public class S3ServiceImpl implements S3Service {
     private String bucket;
     @Value("${spring.cloud.aws.region.static}")
     private String region;
+    @Value("${spring.cloud.aws.s3.key-prefix:}")
+    private String keyPrefix;
 
     public S3UploadDto uploadImageFile(MultipartFile file) {
         String ext = validateFile(file, MAX_IMAGE_FILE_SIZE, ALLOWED_PROFILE_CONTENT_TYPES, ALLOWED_PROFILE_EXTENSIONS);
@@ -102,7 +104,8 @@ public class S3ServiceImpl implements S3Service {
 
     private String createFileName(String dirName, String ext) {
         String uuid = UUID.randomUUID().toString();
-        return dirName + "/" + uuid + "." + ext;
+        String fileName = dirName + "/" + uuid + "." + ext;
+        return keyPrefix.isEmpty() ? fileName : keyPrefix + fileName;
     }
 
     private String extractExt(String originalFileName,  Set<String> allowedExtensions) {

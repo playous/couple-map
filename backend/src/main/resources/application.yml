@@ -73,6 +73,7 @@ spring:
         secret-key: ${S3_SECRET_KEY}
       s3:
         bucket: ${S3_BUCKET_NAME}
+        key-prefix: ${S3_KEY_PREFIX:}
       region:
         static: ap-northeast-2
       stack:
