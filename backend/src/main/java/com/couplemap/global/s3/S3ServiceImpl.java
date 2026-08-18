@@ -5,12 +5,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
+import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 
@@ -47,6 +50,7 @@ public class S3ServiceImpl implements S3Service {
     );
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
 
     @Value("${spring.cloud.aws.s3.bucket}")
     private String bucket;
@@ -54,36 +58,49 @@ public class S3ServiceImpl implements S3Service {
     private String region;
     @Value("${spring.cloud.aws.s3.key-prefix:}")
     private String keyPrefix;
+    @Value("${upload.presign.put-ttl}")
+    private Duration putTtl;
+    @Value("${upload.presign.get-ttl}")
+    private Duration getTtl;
 
-    public S3UploadDto uploadImageFile(MultipartFile file) {
-        String ext = validateFile(file, MAX_IMAGE_FILE_SIZE, ALLOWED_PROFILE_CONTENT_TYPES, ALLOWED_PROFILE_EXTENSIONS);
-        return upload(file, createFileName(PROFILE_DIR, ext));
+    @Override
+    public S3PresignedDto presignMediaUpload(String filename, String contentType, long size) {
+        String ext = validateSpec(filename, contentType, size,
+                MAX_MEDIA_FILE_SIZE, ALLOWED_MEDIA_CONTENT_TYPES, ALLOWED_MEDIA_EXTENSIONS);
+        return presignPut(createFileName(MEMORY_DIR, ext), contentType, size);
     }
 
-    public S3UploadDto uploadMediaFile(MultipartFile file) {
-        String ext = validateFile(file, MAX_MEDIA_FILE_SIZE, ALLOWED_MEDIA_CONTENT_TYPES, ALLOWED_MEDIA_EXTENSIONS);
-        return upload(file, createFileName(MEMORY_DIR, ext));
+    @Override
+    public S3PresignedDto presignImageUpload(String filename, String contentType, long size) {
+        String ext = validateSpec(filename, contentType, size,
+                MAX_IMAGE_FILE_SIZE, ALLOWED_PROFILE_CONTENT_TYPES, ALLOWED_PROFILE_EXTENSIONS);
+        return presignPut(createFileName(PROFILE_DIR, ext), contentType, size);
     }
 
-    private S3UploadDto upload(MultipartFile file, String fileName) {
+    private S3PresignedDto presignPut(String fileKey, String contentType, long size) {
+        // contentType·contentLength를 서명에 포함해 S3가 위반을 거부하게 한다
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(fileKey)
+                .contentType(contentType)
+                .contentLength(size)
+                .build();
+
         try {
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(bucket)
-                    .key(fileName)
-                    .contentType(file.getContentType())
+            PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
+                    .signatureDuration(putTtl)
+                    .putObjectRequest(putObjectRequest)
                     .build();
 
-            s3Client.putObject(putObjectRequest,
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+            String url = s3Presigner.presignPutObject(presignRequest).url().toString();
 
-            return S3UploadDto.builder()
-                    .url(getFileUrl(fileName))
-                    .key(fileName)
+            return S3PresignedDto.builder()
+                    .fileKey(fileKey)
+                    .url(url)
                     .build();
-
         } catch (Exception e) {
-            log.error("S3 파일 업로드 실패: {}", e.getMessage());
-            throw new S3Exception(S3_UPLOAD_FAILED);
+            log.error("presigned URL 발급 실패: {}", e.getMessage());
+            throw new S3Exception(S3_PRESIGN_FAILED);
         }
     }
 
@@ -121,47 +138,43 @@ public class S3ServiceImpl implements S3Service {
         return ext;
     }
 
-    private String getFileUrl(String fileName) {
-        return String.format("https://%s.s3.%s.amazonaws.com/%s", bucket, region, fileName);
+    // 버킷 비공개 후로는 열리지 않는다. NOT NULL 컬럼을 채우기 위해서만 남겨둔 값
+    private String directUrl(String fileKey) {
+        return String.format("https://%s.s3.%s.amazonaws.com/%s", bucket, region, fileKey);
     }
 
-    private String validateFile(MultipartFile file, long maxSize, Set<String> allowedTypes, Set<String> allowedExtensions){
-        checkNull(file);
-        checkSize(file, maxSize);
-        checkContentType(file, allowedTypes);
-        return checkFileExtension(file, allowedExtensions);
-    }
-
-    private void checkNull(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new S3Exception(FILE_IS_EMPTY);
+    // 버킷이 비공개라 직링크로는 못 읽는다. 조회 시점에 서명해서 내려준다
+    @Override
+    public String getFileUrl(String fileKey) {
+        if (fileKey == null) {
+            return null;
         }
+
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(fileKey)
+                .build();
+
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(getTtl)
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        return s3Presigner.presignGetObject(presignRequest).url().toString();
     }
 
-    private void checkSize(MultipartFile file, long maxSize) {
-        if (file.getSize() > maxSize) {
-            throw new S3Exception(FILE_SIZE_EXCEEDED);
+    // presigned 경로용 검증 — 서버가 파일을 받지 않으므로 클라이언트가 신고한 값으로 검사한다
+    private String validateSpec(String filename, String contentType, long size,
+                                long maxSize, Set<String> allowedTypes, Set<String> allowedExtensions) {
+        if (filename == null || filename.isEmpty() || !filename.contains(".")) {
+            throw new S3Exception(INVALID_FILE_NAME);
         }
-    }
-    private void checkContentType(MultipartFile file, Set<String> allowedTypes) {
-        String contentType = file.getContentType();
         if (contentType == null || !allowedTypes.contains(contentType)) {
             throw new S3Exception(INVALID_FILE_TYPE);
         }
-    }
-
-    private String checkFileExtension(MultipartFile file, Set<String> allowedExtensions) {
-        String originalFilename = file.getOriginalFilename();
-
-        if (originalFilename == null || originalFilename.isEmpty()) {
-            throw new S3Exception(INVALID_FILE_NAME);
+        if (size <= 0 || size > maxSize) {
+            throw new S3Exception(FILE_SIZE_EXCEEDED);
         }
-
-        if (!originalFilename.contains(".")) {
-            throw new S3Exception(INVALID_FILE_NAME);
-        }
-
-        return extractExt(originalFilename, allowedExtensions);
+        return extractExt(filename, allowedExtensions);
     }
-
 }

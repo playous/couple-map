@@ -33,6 +33,24 @@ public class FileCleanupService {
         );
     }
 
+    @Transactional
+    public void schedulePendingUpload(List<String> fileKeys, LocalDateTime cleanupAfter) {
+        if (fileKeys == null || fileKeys.isEmpty()) {
+            return;
+        }
+        fileCleanupTaskRepository.saveAll(
+                fileKeys.stream().map(key -> FileCleanupTask.ofPendingUpload(key, cleanupAfter)).toList()
+        );
+    }
+
+    @Transactional
+    public void cancelPendingUpload(List<String> fileKeys) {
+        if (fileKeys == null || fileKeys.isEmpty()) {
+            return;
+        }
+        fileCleanupTaskRepository.deleteByFileKeys(fileKeys);
+    }
+
     @Scheduled(cron = "${file-cleanup.cron}")
     public void processPendingTasks() {
         List<Long> taskIds = fileCleanupTaskRepository.findPendingTaskIds(maxRetry, LocalDateTime.now());

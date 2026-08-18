@@ -55,6 +55,13 @@ public class FileCleanupTask {
                 .build();
     }
 
+    // 발급 직후 등록해 두고 완료 통보가 오면 취소한다. 안 오면 유예 시간 뒤 배치가 회수한다
+    public static FileCleanupTask ofPendingUpload(String fileKey, LocalDateTime cleanupAfter) {
+        FileCleanupTask task = new FileCleanupTask(fileKey);
+        task.nextRetryAt = cleanupAfter;
+        return task;
+    }
+
     public void markDone() {
         this.status = FileCleanupStatus.DONE;
     }
