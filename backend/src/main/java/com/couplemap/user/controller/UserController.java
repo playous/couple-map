@@ -1,6 +1,7 @@
 package com.couplemap.user.controller;
 
 import com.couplemap.global.response.ApiResponse;
+import com.couplemap.user.dto.ProfileImageRequestDto;
 import com.couplemap.user.dto.ProfileImageResponseDto;
 import com.couplemap.user.dto.NicknameRequestDto;
 import com.couplemap.user.dto.NicknameResponseDto;
@@ -13,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 
 @Tag(name = "User", description = "사용자 관리 API")
@@ -24,13 +24,13 @@ public class UserController {
 
     private final UserService userService;
 
-    @Operation(summary = "프로필 이미지 업로드/수정")
+    @Operation(summary = "프로필 이미지 등록", description = "/api/uploads/image로 발급받아 S3에 올린 뒤 호출합니다.")
     @PostMapping("/profile-image")
     public ResponseEntity<ApiResponse<ProfileImageResponseDto>> uploadProfileImage(
-            @RequestParam("file") MultipartFile file,
+            @Valid @RequestBody ProfileImageRequestDto request,
             @AuthenticationPrincipal(expression = "userId") Long userId) {
 
-        ProfileImageResponseDto response = userService.updateProfileImage(userId, file);
+        ProfileImageResponseDto response = userService.updateProfileImage(userId, request);
 
         return ResponseEntity.ok(ApiResponse.success(response, "프로필 사진 등록이 완료되었습니다."));
     }

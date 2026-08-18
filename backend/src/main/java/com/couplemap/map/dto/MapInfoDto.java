@@ -5,6 +5,7 @@ import com.couplemap.map.domain.MapMemberRole;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.function.Function;
 
 @Getter
 public class MapInfoDto {
@@ -28,12 +29,12 @@ public class MapInfoDto {
         this.createdAt = createdAt;
     }
 
-    public static MapInfoDto from(MapMember mapMember, long memberCount) {
+    public static MapInfoDto from(MapMember mapMember, long memberCount, Function<String, String> urlOf) {
         return new MapInfoDto(
                 mapMember.getMap().getMapId(),
                 mapMember.getMap().getMapName(),
                 mapMember.getMap().getDescription(),
-                mapMember.getMap().getBackgroundUrl(),
+                urlOf.apply(mapMember.getMap().getBackgroundKey()),
                 mapMember.getMapMemberRole(),
                 memberCount,
                 mapMember.getMap().getCategory(),

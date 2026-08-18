@@ -11,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
 import java.util.List;
@@ -24,13 +23,12 @@ public class MapController {
 
     private final MapService mapService;
 
-    @Operation(summary = "지도 생성")
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "지도 생성", description = "배경 이미지는 /api/uploads/image로 먼저 올리고 키만 전달합니다.")
+    @PostMapping
     public ResponseEntity<ApiResponse<Long>> createMap(
-            @Valid @RequestPart("request") CreateMapRequestDto request,
-            @RequestPart(value = "backgroundImage", required = false) MultipartFile backgroundImage,
+            @Valid @RequestBody CreateMapRequestDto request,
             @AuthenticationPrincipal(expression = "userId") Long userId) {
-        Long mapId = mapService.createMap(request, backgroundImage, userId);
+        Long mapId = mapService.createMap(request, userId);
         return ResponseEntity.created(URI.create("/api/map/" + mapId))
                 .body(ApiResponse.success(mapId, "지도가 성공적으로 생성되었습니다."));
     }
@@ -51,13 +49,12 @@ public class MapController {
     }
 
     @Operation(summary = "지도 수정")
-    @PutMapping(value = "/{mapId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PutMapping("/{mapId}")
     public ResponseEntity<ApiResponse<Void>> updateMap(
             @PathVariable Long mapId,
-            @Valid @RequestPart("request") UpdateMapRequestDto request,
-            @RequestPart(value = "backgroundImage", required = false) MultipartFile backgroundImage,
+            @Valid @RequestBody UpdateMapRequestDto request,
             @AuthenticationPrincipal(expression = "userId") Long userId) {
-        mapService.updateMap(mapId, request, backgroundImage, userId);
+        mapService.updateMap(mapId, request, userId);
         return ResponseEntity.ok(ApiResponse.success("지도를 수정했습니다."));
     }
 

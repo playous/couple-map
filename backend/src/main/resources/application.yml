@@ -1,6 +1,6 @@
 spring:
   application:
-    name: couplemap
+    name: vestige
   profiles:
     default: dev
 
@@ -82,9 +82,17 @@ spring:
   # Multipart
   servlet:
     multipart:
-      max-file-size: 5MB
+      max-file-size: 100MB
       max-request-size: 110MB
 
+
+# Upload
+upload:
+  presign:
+    put-ttl: 10m
+    get-ttl: 30m
+  session-ttl: 1h
+  orphan-grace: 1h
 
 # File Cleanup
 file-cleanup:
@@ -104,7 +112,7 @@ server:
 management:
   metrics:
     tags:
-      application: couplemap
+      application: vestige
     distribution:
       percentiles-histogram:
         http.server.requests: true

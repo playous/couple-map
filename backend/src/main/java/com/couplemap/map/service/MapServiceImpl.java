@@ -7,7 +7,7 @@ import com.couplemap.global.exception.exceptions.MapException;
 import com.couplemap.global.exception.exceptions.UserException;
 import com.couplemap.global.filecleanup.FileCleanupService;
 import com.couplemap.global.s3.S3Service;
-import com.couplemap.global.s3.S3UploadDto;
+import com.couplemap.global.upload.ImageUploadService;
 import com.couplemap.mediafile.repository.MediaFileRepository;
 import com.couplemap.memory.repository.MemoryRepository;
 import com.couplemap.map.domain.Map;
@@ -21,7 +21,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.List;
@@ -42,13 +41,14 @@ public class MapServiceImpl implements MapService {
     private final UserRepository userRepository;
     private final FriendshipRepository friendshipRepository;
     private final S3Service s3Service;
+    private final ImageUploadService imageUploadService;
     private final FileCleanupService fileCleanupService;
     private final MemoryRepository memoryRepository;
     private final MediaFileRepository mediaFileRepository;
 
     @Override
     @Transactional
-    public Long createMap(CreateMapRequestDto request, MultipartFile backgroundImage, Long userId) {
+    public Long createMap(CreateMapRequestDto request, Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
@@ -58,9 +58,10 @@ public class MapServiceImpl implements MapService {
 
         Map newMap = Map.from(request.getMapName(), request.getDescription(), request.getCategory());
 
-        if (backgroundImage != null && !backgroundImage.isEmpty()) {
-            S3UploadDto uploadResult = s3Service.uploadImageFile(backgroundImage);
-            newMap.updateBackground(uploadResult.getUrl(), uploadResult.getKey());
+        if (request.getBackgroundKey() != null) {
+            String fileKey = imageUploadService.consume(
+                    request.getUploadId(), request.getBackgroundKey(), userId);
+            newMap.updateBackgroundKey(fileKey);
         }
 
         mapRepository.save(newMap);
@@ -103,7 +104,7 @@ public class MapServiceImpl implements MapService {
 
     @Override
     @Transactional
-    public void updateMap(Long mapId, UpdateMapRequestDto request, MultipartFile backgroundImage, Long userId) {
+    public void updateMap(Long mapId, UpdateMapRequestDto request, Long userId) {
         Map map = mapRepository.findById(mapId)
                 .orElseThrow(() -> new MapException(MAP_NOT_FOUND));
 
@@ -120,10 +121,11 @@ public class MapServiceImpl implements MapService {
 
         map.update(request.getMapName(), request.getDescription(), request.getCategory());
 
-        if (backgroundImage != null && !backgroundImage.isEmpty()) {
+        if (request.getBackgroundKey() != null) {
             String oldBackgroundKey = map.getBackgroundKey();
-            S3UploadDto uploadResult = s3Service.uploadImageFile(backgroundImage);
-            map.updateBackground(uploadResult.getUrl(), uploadResult.getKey());
+            String fileKey = imageUploadService.consume(
+                    request.getUploadId(), request.getBackgroundKey(), userId);
+            map.updateBackgroundKey(fileKey);
             if (oldBackgroundKey != null) {
                 fileCleanupService.scheduleDelete(oldBackgroundKey);
             }
@@ -148,7 +150,8 @@ public class MapServiceImpl implements MapService {
                 .forEach(row -> countMap.put((Long) row[0], (Long) row[1]));
 
         return mapMembers.stream()
-                .map(mm -> MapInfoDto.from(mm, countMap.getOrDefault(mm.getMap().getMapId(), 0L)))
+                .map(mm -> MapInfoDto.from(mm, countMap.getOrDefault(mm.getMap().getMapId(), 0L),
+                        s3Service::getFileUrl))
                 .toList();
     }
 
@@ -159,7 +162,7 @@ public class MapServiceImpl implements MapService {
                 .orElseThrow(() -> new MapException(NOT_MAP_MEMBER));
 
         long memberCount = mapMemberRepository.countByMap_MapIdAndMapMemberRoleNot(mapId, PENDING);
-        return MapInfoDto.from(mapMember, memberCount);
+        return MapInfoDto.from(mapMember, memberCount, s3Service::getFileUrl);
     }
 
     @Override
@@ -244,7 +247,7 @@ public class MapServiceImpl implements MapService {
                 .orElseThrow(() -> new MapException(NOT_MAP_MEMBER));
 
         return mapMemberRepository.findAllByMap_MapIdAndMapMemberRoleNot(mapId, PENDING).stream()
-                .map(MapMemberDto::from)
+                .map(mm -> MapMemberDto.from(mm, s3Service::getFileUrl))
                 .toList();
     }
 

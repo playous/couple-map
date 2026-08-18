@@ -7,8 +7,8 @@ import com.couplemap.global.exception.exceptions.MemoryException;
 import com.couplemap.global.exception.exceptions.S3Exception;
 import com.couplemap.global.exception.exceptions.UserException;
 import com.couplemap.global.filecleanup.FileCleanupService;
+import com.couplemap.global.s3.S3PresignedDto;
 import com.couplemap.global.s3.S3Service;
-import com.couplemap.global.s3.S3UploadDto;
 import com.couplemap.map.domain.Map;
 import com.couplemap.map.domain.MapMember;
 import com.couplemap.map.repository.MapMemberRepository;
@@ -17,27 +17,34 @@ import com.couplemap.mediafile.domain.MediaFile;
 import com.couplemap.mediafile.domain.MediaFileType;
 import com.couplemap.mediafile.repository.MediaFileRepository;
 import com.couplemap.memory.domain.Memory;
+import com.couplemap.memory.domain.UploadSession;
 import com.couplemap.memory.dto.CalendarMemoryResponseDto;
+import com.couplemap.memory.dto.CompleteUploadRequestDto;
 import com.couplemap.memory.dto.CreateMemoryRequestDto;
 import com.couplemap.memory.dto.MediaFileDto;
 import com.couplemap.memory.dto.MemoryDetailResponseDto;
 import com.couplemap.memory.dto.MemoryListResponseDto;
 import com.couplemap.memory.dto.MemoryMarkerResponseDto;
 import com.couplemap.memory.dto.UpdateMemoryRequestDto;
+import com.couplemap.memory.dto.UploadUrlRequestDto;
+import com.couplemap.memory.dto.UploadUrlResponseDto;
 import com.couplemap.memory.repository.MemoryRepository;
+import com.couplemap.memory.repository.UploadSessionRepository;
 import com.couplemap.user.domain.User;
 import com.couplemap.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static com.couplemap.global.exception.code.MapErrorCode.*;
@@ -45,6 +52,7 @@ import static com.couplemap.global.exception.code.MemoryErrorCode.*;
 import static com.couplemap.global.exception.code.UserErrorCode.USER_NOT_FOUND;
 import static com.couplemap.map.domain.MapMemberRole.EDITOR;
 import static com.couplemap.map.domain.MapMemberRole.OWNER;
+import static com.couplemap.map.domain.MapMemberRole.PENDING;
 
 @Service
 @RequiredArgsConstructor
@@ -58,47 +66,121 @@ public class MemoryServiceImpl implements MemoryService {
     private final S3Service s3Service;
     private final FileCleanupService fileCleanupService;
     private final MediaFileRepository mediaFileRepository;
+    private final UploadSessionRepository uploadSessionRepository;
+
+    @Value("${upload.session-ttl}")
+    private Duration sessionTtl;
+    @Value("${upload.orphan-grace}")
+    private Duration orphanGrace;
 
     @Override
     @Transactional
-    public Long createMemory(Long mapId, CreateMemoryRequestDto request, List<MultipartFile> files, Long userId) {
-        // 1. 사용자 및 지도 멤버 정보 조회, 권한 확인
+    public Long createMemory(Long mapId, CreateMemoryRequestDto request, Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
-        MapMember mapMember = mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)
-                .orElseThrow(() -> new MapException(NOT_MAP_MEMBER));
-
-        if (mapMember.getMapMemberRole() != OWNER && mapMember.getMapMemberRole() != EDITOR) {
-            throw new MapException(NOT_MAP_MEMBER);
-        }
+        validateWritableMember(mapId, userId);
 
         Map map = mapRepository.findById(mapId)
                 .orElseThrow(() -> new MapException(MAP_NOT_FOUND));
 
-        // 2. Memory 객체 생성 및 저장
         Memory newMemory = Memory.from(request, map, user);
         memoryRepository.save(newMemory);
-
-        // 3. 파일 업로드 및 MediaFile 저장
-        if (files != null && !files.isEmpty()) {
-            AtomicInteger displayOrder = new AtomicInteger(1);
-            files.forEach(file -> {
-                S3UploadDto s3Dto = s3Service.uploadMediaFile(file);
-                MediaFileType fileType = getMediaFileType(file);
-                MediaFile mediaFile = MediaFile.from(newMemory, s3Dto, file, fileType, displayOrder.getAndIncrement());
-                mediaFileRepository.save(mediaFile);
-            });
-        }
 
         return newMemory.getMemoryId();
     }
 
     @Override
+    @Transactional
+    public UploadUrlResponseDto issueUploadUrls(Long mapId, UploadUrlRequestDto request, Long userId) {
+        validateWritableMember(mapId, userId);
+
+        List<S3PresignedDto> presigned = request.getFiles().stream()
+                .map(f -> s3Service.presignMediaUpload(f.getFilename(), f.getContentType(), f.getSize()))
+                .toList();
+
+        List<UploadSession.UploadFile> sessionFiles = new ArrayList<>();
+        for (int i = 0; i < presigned.size(); i++) {
+            UploadUrlRequestDto.FileSpec spec = request.getFiles().get(i);
+            sessionFiles.add(new UploadSession.UploadFile(
+                    presigned.get(i).getFileKey(), spec.getFilename(), spec.getContentType(), spec.getSize()));
+        }
+
+        String uploadId = UUID.randomUUID().toString();
+        uploadSessionRepository.save(UploadSession.of(uploadId, userId, mapId,
+                UploadSession.PURPOSE_MEMORY, sessionFiles, sessionTtl.toSeconds()));
+
+        fileCleanupService.schedulePendingUpload(
+                presigned.stream().map(S3PresignedDto::getFileKey).toList(),
+                LocalDateTime.now().plus(orphanGrace));
+
+        return UploadUrlResponseDto.of(uploadId, presigned);
+    }
+
+    @Override
+    @Transactional
+    public Long completeUpload(Long mapId, CompleteUploadRequestDto request, Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
+
+        validateWritableMember(mapId, userId);
+
+        Map map = mapRepository.findById(mapId)
+                .orElseThrow(() -> new MapException(MAP_NOT_FOUND));
+
+        UploadSession session = uploadSessionRepository.findById(request.getUploadId())
+                .orElseThrow(() -> new S3Exception(S3ErrorCode.UPLOAD_SESSION_NOT_FOUND));
+
+        if (!session.isOwnedBy(userId, mapId)) {
+            throw new S3Exception(S3ErrorCode.UPLOAD_SESSION_MISMATCH);
+        }
+
+        Memory memory = Memory.from(request.getRequest(), map, user);
+        memoryRepository.save(memory);
+
+        List<CompleteUploadRequestDto.FileRef> refs =
+                request.getFiles() == null ? List.of() : request.getFiles();
+
+        if (!refs.isEmpty()) {
+            List<MediaFile> mediaFiles = refs.stream()
+                    .map(ref -> toMediaFile(memory, session, ref, ref.getDisplayOrder()))
+                    .toList();
+            mediaFileRepository.saveAll(mediaFiles);
+        }
+
+        // 실제로 쓴 키만 회수 예약을 푼다. 발급만 받고 안 쓴 키는 배치가 지운다
+        fileCleanupService.cancelPendingUpload(
+                refs.stream().map(CompleteUploadRequestDto.FileRef::getFileKey).toList());
+        uploadSessionRepository.deleteById(request.getUploadId());
+
+        return memory.getMemoryId();
+    }
+
+    private MediaFile toMediaFile(Memory memory, UploadSession session,
+                                  CompleteUploadRequestDto.FileRef ref, int displayOrder) {
+        UploadSession.UploadFile issued = session.find(ref.getFileKey())
+                .orElseThrow(() -> new S3Exception(S3ErrorCode.UPLOAD_SESSION_MISMATCH));
+
+        return MediaFile.of(
+                memory,
+                issued.getFileKey(),
+                issued.getFilename(),
+                mediaFileTypeOf(issued.getContentType()),
+                issued.getSize(),
+                displayOrder);
+    }
+
+    private int maxDisplayOrder(Long memoryId) {
+        return mediaFileRepository.findByMemoryIdOrderByDisplayOrder(memoryId).stream()
+                .mapToInt(MediaFile::getDisplayOrder)
+                .max()
+                .orElse(0);
+    }
+
+    @Override
     public Slice<MemoryListResponseDto> getMemoryList(Long mapId, Long userId, Pageable pageable) {
         // 1. 권한 검증
-        mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)
-                .orElseThrow(() -> new MapException(NOT_MAP_MEMBER));
+        validateActiveMember(mapId, userId);
 
         // 2. 페이징 조회
         Slice<Memory> memorySlice = memoryRepository.findByMap_MapId(mapId, pageable);
@@ -110,7 +192,7 @@ public class MemoryServiceImpl implements MemoryService {
         java.util.Map<Long, String> thumbnailMap = mediaFileRepository.findByMemoryIdIn(memoryIds).stream()
                 .collect(Collectors.toMap(
                         mf -> mf.getMemory().getMemoryId(),
-                        MediaFile::getFileUrl,
+                        mf -> s3Service.getFileUrl(mf.getFileKey()),
                         (existing, replacement) -> existing
                 ));
 
@@ -124,8 +206,7 @@ public class MemoryServiceImpl implements MemoryService {
     @Override
     public List<MemoryMarkerResponseDto> getMemoryMarkers(Long mapId, Long userId) {
         // 1. 권한 검증
-        mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)
-                .orElseThrow(() -> new MapException(NOT_MAP_MEMBER));
+        validateActiveMember(mapId, userId);
 
         // 2. 좌표만 조회
         return memoryRepository.findAllByMap_MapId(mapId).stream()
@@ -138,7 +219,7 @@ public class MemoryServiceImpl implements MemoryService {
 
         List<MediaFileDto> mediaFiles = mediaFileRepository.findByMemoryIdOrderByDisplayOrder(memoryId)
                 .stream()
-                .map(MediaFileDto::new)
+                .map(mf -> new MediaFileDto(mf, s3Service.getFileUrl(mf.getFileKey())))
                 .collect(Collectors.toList());
 
         return new MemoryDetailResponseDto(memory, mediaFiles);
@@ -161,9 +242,8 @@ public class MemoryServiceImpl implements MemoryService {
 
     @Override
     @Transactional
-    public Long updateMemory(Long mapId, Long memoryId, UpdateMemoryRequestDto request,
-                             List<MultipartFile> files, Long userId) {
-        
+    public Long updateMemory(Long mapId, Long memoryId, UpdateMemoryRequestDto request, Long userId) {
+
         Memory memory = validateAndGetMemory(mapId, memoryId, userId);
         validateMemoryOwnership(memory, userId, NO_PERMISSION_TO_UPDATE);
 
@@ -182,34 +262,34 @@ public class MemoryServiceImpl implements MemoryService {
             mediaFileRepository.deleteAll(filesToDelete);
         }
 
-        // 새 파일 추가
-        if (files != null && !files.isEmpty()) {
-            List<MediaFile> existingFiles = mediaFileRepository.findByMemoryIdOrderByDisplayOrder(memoryId);
+        // 새 파일 추가 — presigned로 이미 S3에 올라간 키를 받는다
+        List<CompleteUploadRequestDto.FileRef> newRefs =
+                request.getFiles() == null ? List.of() : request.getFiles();
 
-            int maxOrder = 0;
-            for (MediaFile file : existingFiles) {
-                if (file.getDisplayOrder() > maxOrder) {
-                    maxOrder = file.getDisplayOrder();
-                }
+        if (!newRefs.isEmpty()) {
+            UploadSession session = uploadSessionRepository.findById(request.getUploadId())
+                    .orElseThrow(() -> new S3Exception(S3ErrorCode.UPLOAD_SESSION_NOT_FOUND));
+
+            if (!session.isOwnedBy(userId, mapId)) {
+                throw new S3Exception(S3ErrorCode.UPLOAD_SESSION_MISMATCH);
             }
 
+            int displayOrder = maxDisplayOrder(memoryId) + 1;
             List<MediaFile> newFiles = new ArrayList<>();
-            int displayOrder = maxOrder + 1;
-
-            for (MultipartFile file : files) {
-                S3UploadDto s3Dto = s3Service.uploadMediaFile(file);
-                MediaFileType fileType = getMediaFileType(file);
-                newFiles.add(MediaFile.from(memory, s3Dto, file, fileType, displayOrder++));
+            for (CompleteUploadRequestDto.FileRef ref : newRefs) {
+                newFiles.add(toMediaFile(memory, session, ref, displayOrder++));
             }
-
             mediaFileRepository.saveAll(newFiles);
+
+            fileCleanupService.cancelPendingUpload(
+                    newRefs.stream().map(CompleteUploadRequestDto.FileRef::getFileKey).toList());
+            uploadSessionRepository.deleteById(request.getUploadId());
         }
 
         return memory.getMemoryId();
     }
 
-    private MediaFileType getMediaFileType(MultipartFile file) {
-        String contentType = file.getContentType();
+    private MediaFileType mediaFileTypeOf(String contentType) {
         if (contentType == null) {
             throw new S3Exception(S3ErrorCode.INVALID_FILE_TYPE);
         }
@@ -225,10 +305,25 @@ public class MemoryServiceImpl implements MemoryService {
         }
     }
 
+    private void validateWritableMember(Long mapId, Long userId) {
+        MapMember mapMember = mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)
+                .orElseThrow(() -> new MapException(NOT_MAP_MEMBER));
+
+        if (mapMember.getMapMemberRole() != OWNER && mapMember.getMapMemberRole() != EDITOR) {
+            throw new MapException(NOT_MAP_MEMBER);
+        }
+    }
+
+    // 조회 권한 검증 — 행 존재만 보면 수락 전 PENDING 멤버가 추억, 좌표를 전부 열람한다
+    private void validateActiveMember(Long mapId, Long userId) {
+        mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)
+                .filter(mapMember -> mapMember.getMapMemberRole() != PENDING)
+                .orElseThrow(() -> new MapException(NOT_MAP_MEMBER));
+    }
+
     private Memory validateAndGetMemory(Long mapId, Long memoryId, Long userId) {
         // 맵 멤버 검증
-        mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)
-                .orElseThrow(() -> new MapException(NOT_MAP_MEMBER));
+        validateActiveMember(mapId, userId);
 
         // Memory 조회
         Memory memory = memoryRepository.findById(memoryId)
@@ -255,7 +350,7 @@ public class MemoryServiceImpl implements MemoryService {
         java.util.Map<Long, String> thumbnailMap = mediaFileRepository.findByMemoryIdIn(memoryIds).stream()
                 .collect(Collectors.toMap(
                         mf -> mf.getMemory().getMemoryId(),
-                        MediaFile::getFileUrl,
+                        mf -> s3Service.getFileUrl(mf.getFileKey()),
                         (existing, replacement) -> existing
                 ));
 

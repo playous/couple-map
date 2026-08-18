@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/network/s3_uploader.dart';
 import '../../../auth/data/models/user_model.dart';
 import 'dart:io';
 
@@ -27,12 +28,13 @@ class MypageRepository {
 
   Future<String> uploadProfileImage(File imageFile) async {
     try {
-      final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(imageFile.path),
-      });
+      final issued = await S3Uploader.uploadImage(imageFile);
       final response = await DioClient.instance.post(
         '/api/users/profile-image',
-        data: formData,
+        data: {
+          'uploadId': issued.uploadId,
+          'fileKey': issued.fileKeys.first,
+        },
       );
       return response.data['data']['imageUrl'] as String;
     } on DioException catch (e) {

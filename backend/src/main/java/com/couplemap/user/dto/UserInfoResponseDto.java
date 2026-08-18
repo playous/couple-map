@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.function.Function;
 
 @Getter
 @Builder
@@ -26,13 +27,13 @@ public class UserInfoResponseDto {
 
     private long memoryCount;
 
-    public static UserInfoResponseDto from(User user, long memoryCount) {
+    public static UserInfoResponseDto from(User user, long memoryCount, Function<String, String> urlOf) {
         return UserInfoResponseDto.builder()
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .name(user.getName())
                 .nickname(user.getNickname())
-                .profileImageUrl(user.getProfileImageUrl())
+                .profileImageUrl(urlOf.apply(user.getProfileImageKey()))
                 .friendCode(user.getFriendCode())
                 .createdAt(user.getCreatedAt())
                 .memoryCount(memoryCount)

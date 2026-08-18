@@ -7,7 +7,7 @@ import com.couplemap.global.exception.exceptions.MapException;
 import com.couplemap.global.exception.exceptions.UserException;
 import com.couplemap.global.filecleanup.FileCleanupService;
 import com.couplemap.global.s3.S3Service;
-import com.couplemap.global.s3.S3UploadDto;
+import com.couplemap.global.upload.ImageUploadService;
 import com.couplemap.map.domain.Map;
 import com.couplemap.map.domain.MapMember;
 import com.couplemap.map.domain.MapMemberRole;
@@ -26,9 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -61,6 +59,9 @@ public class MapServiceImplTest {
 
     @Mock
     private S3Service s3Service;
+
+    @Mock
+    private ImageUploadService imageUploadService;
 
     @Mock
     private FileCleanupService fileCleanupService;
@@ -111,7 +112,7 @@ public class MapServiceImplTest {
     @DisplayName("지도 생성 성공")
     void createMap_Success() {
         // given
-        CreateMapRequestDto request = new CreateMapRequestDto("New Map", "Description", "Solo");
+        CreateMapRequestDto request = new CreateMapRequestDto("New Map", "Description", "Solo", null, null);
         Long userId = 1L;
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
@@ -119,7 +120,7 @@ public class MapServiceImplTest {
         when(mapRepository.save(any(Map.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        Long mapId = mapService.createMap(request, null, userId);
+        Long mapId = mapService.createMap(request, userId);
 
         // then
         verify(userRepository).findById(userId);
@@ -132,14 +133,14 @@ public class MapServiceImplTest {
     @DisplayName("지도 생성 실패 - 지도 이름 중복")
     void createMap_MapNameDuplicated() {
         // given
-        CreateMapRequestDto request = new CreateMapRequestDto("Duplicate Map", "Description", "Solo");
+        CreateMapRequestDto request = new CreateMapRequestDto("Duplicate Map", "Description", "Solo", null, null);
         Long userId = 1L;
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(mapMemberRepository.existsByUserIdAndMapName(userId, request.getMapName(), MapMemberRole.PENDING)).thenReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> mapService.createMap(request, null, userId))
+        assertThatThrownBy(() -> mapService.createMap(request, userId))
                 .isInstanceOf(MapException.class)
                 .hasMessage(MAP_NAME_DUPLICATED.getMessage());
     }
@@ -186,14 +187,14 @@ public class MapServiceImplTest {
         // given
         Long mapId = 1L;
         Long userId = 1L;
-        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated Map", "Updated Description", "Solo");
+        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated Map", "Updated Description", "Solo", null, null);
 
         when(mapRepository.findById(mapId)).thenReturn(Optional.of(testMap));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)).thenReturn(Optional.of(testMapMember));
         when(mapMemberRepository.existsByUserIdAndMapNameExcludingMapId(userId, request.getMapName(), mapId, MapMemberRole.PENDING)).thenReturn(false);
 
         // when
-        mapService.updateMap(mapId, request, null, userId);
+        mapService.updateMap(mapId, request, userId);
 
         // then
         verify(mapRepository).findById(mapId);
@@ -209,14 +210,14 @@ public class MapServiceImplTest {
         // given
         Long mapId = 1L;
         Long userId = 1L;
-        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated Map", "Updated Description", "Solo");
+        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated Map", "Updated Description", "Solo", null, null);
         MapMember editorMember = MapMember.from(testMap, testUser, MapMemberRole.EDITOR);
 
         when(mapRepository.findById(mapId)).thenReturn(Optional.of(testMap));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)).thenReturn(Optional.of(editorMember));
 
         // when & then
-        assertThatThrownBy(() -> mapService.updateMap(mapId, request, null, userId))
+        assertThatThrownBy(() -> mapService.updateMap(mapId, request, userId))
                 .isInstanceOf(MapException.class)
                 .hasMessage(NO_UPDATE_PERMISSION.getMessage());
     }
@@ -227,14 +228,14 @@ public class MapServiceImplTest {
         // given
         Long mapId = 1L;
         Long userId = 1L;
-        UpdateMapRequestDto request = new UpdateMapRequestDto("Duplicate Map", "Updated Description", "Solo");
+        UpdateMapRequestDto request = new UpdateMapRequestDto("Duplicate Map", "Updated Description", "Solo", null, null);
 
         when(mapRepository.findById(mapId)).thenReturn(Optional.of(testMap));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)).thenReturn(Optional.of(testMapMember));
         when(mapMemberRepository.existsByUserIdAndMapNameExcludingMapId(userId, request.getMapName(), mapId, MapMemberRole.PENDING)).thenReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> mapService.updateMap(mapId, request, null, userId))
+        assertThatThrownBy(() -> mapService.updateMap(mapId, request, userId))
                 .isInstanceOf(MapException.class)
                 .hasMessage(MAP_NAME_DUPLICATED.getMessage());
     }
@@ -436,31 +437,42 @@ public class MapServiceImplTest {
     @DisplayName("지도 생성 성공 - 배경 이미지 포함")
     void createMap_WithBackgroundImage_Success() {
         // given
-        CreateMapRequestDto request = new CreateMapRequestDto("New Map", "Description", "Solo");
+        CreateMapRequestDto request = new CreateMapRequestDto(
+                "New Map", "Description", "Solo", "upload-1", "profile/test.jpg");
         Long userId = 1L;
-        MultipartFile backgroundImage = new MockMultipartFile(
-                "backgroundImage",
-                "test.jpg",
-                "image/jpeg",
-                "test image content".getBytes()
-        );
-        S3UploadDto uploadResult = S3UploadDto.builder()
-                .url("https://s3.amazonaws.com/bucket/test.jpg")
-                .key("test.jpg")
-                .build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
         when(mapMemberRepository.existsByUserIdAndMapName(userId, request.getMapName(), MapMemberRole.PENDING)).thenReturn(false);
-        when(s3Service.uploadImageFile(backgroundImage)).thenReturn(uploadResult);
+        when(imageUploadService.consume("upload-1", "profile/test.jpg", userId)).thenReturn("profile/test.jpg");
         when(mapRepository.save(any(Map.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        mapService.createMap(request, backgroundImage, userId);
+        mapService.createMap(request, userId);
 
         // then
-        verify(s3Service).uploadImageFile(backgroundImage);
+        verify(imageUploadService).consume("upload-1", "profile/test.jpg", userId);
         verify(mapRepository).save(any(Map.class));
         verify(mapMemberRepository).save(any(MapMember.class));
+    }
+
+    @Test
+    @DisplayName("지도 생성 성공 - 배경 이미지 없음")
+    void createMap_WithoutBackgroundImage_Success() {
+        // given
+        CreateMapRequestDto request = new CreateMapRequestDto(
+                "New Map", "Description", "Solo", null, null);
+        Long userId = 1L;
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
+        when(mapMemberRepository.existsByUserIdAndMapName(userId, request.getMapName(), MapMemberRole.PENDING)).thenReturn(false);
+        when(mapRepository.save(any(Map.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        mapService.createMap(request, userId);
+
+        // then
+        verify(imageUploadService, never()).consume(any(), any(), any());
+        verify(mapRepository).save(any(Map.class));
     }
 
     @Test
@@ -469,35 +481,23 @@ public class MapServiceImplTest {
         // given
         Long mapId = 1L;
         Long userId = 1L;
-        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated Map", "Updated Description", "Solo");
-        MultipartFile newBackgroundImage = new MockMultipartFile(
-                "backgroundImage",
-                "new_test.jpg",
-                "image/jpeg",
-                "new test image content".getBytes()
-        );
-        S3UploadDto uploadResult = S3UploadDto.builder()
-                .url("https://s3.amazonaws.com/bucket/new_test.jpg")
-                .key("new_test.jpg")
-                .build();
+        UpdateMapRequestDto request = new UpdateMapRequestDto(
+                "Updated Map", "Updated Description", "Solo", "upload-1", "profile/new_test.jpg");
 
         // 기존 배경 이미지가 있는 지도 설정
         ReflectionTestUtils.setField(testMap, "backgroundKey", "old_test.jpg");
-        ReflectionTestUtils.setField(testMap, "backgroundUrl", "https://s3.amazonaws.com/bucket/old_test.jpg");
 
         when(mapRepository.findById(mapId)).thenReturn(Optional.of(testMap));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)).thenReturn(Optional.of(testMapMember));
         when(mapMemberRepository.existsByUserIdAndMapNameExcludingMapId(userId, request.getMapName(), mapId, MapMemberRole.PENDING)).thenReturn(false);
-        when(s3Service.uploadImageFile(newBackgroundImage)).thenReturn(uploadResult);
+        when(imageUploadService.consume("upload-1", "profile/new_test.jpg", userId)).thenReturn("profile/new_test.jpg");
 
         // when
-        mapService.updateMap(mapId, request, newBackgroundImage, userId);
+        mapService.updateMap(mapId, request, userId);
 
         // then
         verify(fileCleanupService).scheduleDelete("old_test.jpg");
-        verify(s3Service).uploadImageFile(newBackgroundImage);
-        assertThat(testMap.getBackgroundUrl()).isEqualTo("https://s3.amazonaws.com/bucket/new_test.jpg");
-        assertThat(testMap.getBackgroundKey()).isEqualTo("new_test.jpg");
+        assertThat(testMap.getBackgroundKey()).isEqualTo("profile/new_test.jpg");
     }
 
     @Test
@@ -506,41 +506,30 @@ public class MapServiceImplTest {
         // given
         Long mapId = 1L;
         Long userId = 1L;
-        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated Map", "Updated Description", "Solo");
-        MultipartFile newBackgroundImage = new MockMultipartFile(
-                "backgroundImage",
-                "new_test.jpg",
-                "image/jpeg",
-                "new test image content".getBytes()
-        );
-        S3UploadDto uploadResult = S3UploadDto.builder()
-                .url("https://s3.amazonaws.com/bucket/new_test.jpg")
-                .key("new_test.jpg")
-                .build();
+        UpdateMapRequestDto request = new UpdateMapRequestDto(
+                "Updated Map", "Updated Description", "Solo", "upload-1", "profile/new_test.jpg");
 
         when(mapRepository.findById(mapId)).thenReturn(Optional.of(testMap));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(mapId, userId)).thenReturn(Optional.of(testMapMember));
         when(mapMemberRepository.existsByUserIdAndMapNameExcludingMapId(userId, request.getMapName(), mapId, MapMemberRole.PENDING)).thenReturn(false);
-        when(s3Service.uploadImageFile(newBackgroundImage)).thenReturn(uploadResult);
+        when(imageUploadService.consume("upload-1", "profile/new_test.jpg", userId)).thenReturn("profile/new_test.jpg");
 
         // when
-        mapService.updateMap(mapId, request, newBackgroundImage, userId);
+        mapService.updateMap(mapId, request, userId);
 
         // then
-        verify(s3Service, never()).deleteFile(any());
-        verify(s3Service).uploadImageFile(newBackgroundImage);
-        assertThat(testMap.getBackgroundUrl()).isEqualTo("https://s3.amazonaws.com/bucket/new_test.jpg");
-        assertThat(testMap.getBackgroundKey()).isEqualTo("new_test.jpg");
+        verify(fileCleanupService, never()).scheduleDelete(any());
+        assertThat(testMap.getBackgroundKey()).isEqualTo("profile/new_test.jpg");
     }
 
     @Test
     @DisplayName("지도 생성 실패 - 사용자 없음")
     void createMap_UserNotFound() {
-        CreateMapRequestDto request = new CreateMapRequestDto("Map", "Desc", "Solo");
+        CreateMapRequestDto request = new CreateMapRequestDto("Map", "Desc", "Solo", null, null);
 
         when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> mapService.createMap(request, null, 99L))
+        assertThatThrownBy(() -> mapService.createMap(request, 99L))
                 .isInstanceOf(UserException.class)
                 .hasMessage(USER_NOT_FOUND.getMessage());
     }
@@ -578,11 +567,11 @@ public class MapServiceImplTest {
     @Test
     @DisplayName("지도 수정 실패 - 맵 없음")
     void updateMap_MapNotFound() {
-        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated", "Desc", "Solo");
+        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated", "Desc", "Solo", null, null);
 
         when(mapRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> mapService.updateMap(99L, request, null, 1L))
+        assertThatThrownBy(() -> mapService.updateMap(99L, request, 1L))
                 .isInstanceOf(MapException.class)
                 .hasMessage(MAP_NOT_FOUND.getMessage());
     }
@@ -590,12 +579,12 @@ public class MapServiceImplTest {
     @Test
     @DisplayName("지도 수정 실패 - 맵 멤버 아님")
     void updateMap_NotMapMember() {
-        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated", "Desc", "Solo");
+        UpdateMapRequestDto request = new UpdateMapRequestDto("Updated", "Desc", "Solo", null, null);
 
         when(mapRepository.findById(1L)).thenReturn(Optional.of(testMap));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(1L, 99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> mapService.updateMap(1L, request, null, 99L))
+        assertThatThrownBy(() -> mapService.updateMap(1L, request, 99L))
                 .isInstanceOf(MapException.class)
                 .hasMessage(NOT_MAP_MEMBER.getMessage());
     }

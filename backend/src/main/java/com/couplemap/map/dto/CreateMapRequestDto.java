@@ -19,4 +19,8 @@ public class CreateMapRequestDto {
 
     @NotBlank(message = "지도 카테고리는 필수입니다.")
     private String category;
+
+    // 배경 이미지가 있을 때만 채운다. /api/uploads/image로 발급받은 값
+    private String uploadId;
+    private String backgroundKey;
 }
