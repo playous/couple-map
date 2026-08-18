@@ -55,4 +55,9 @@ public interface MapMemberRepository extends JpaRepository<MapMember, Long> {
     @Modifying
     @Query("DELETE FROM MapMember mm WHERE mm.user.userId = :userId")
     void deleteAllByUserId(@Param("userId") Long userId);
+
+    // 탈퇴 시 inviter_id FK 잔존으로 users 삭제가 막히는 것 방지 — 행 삭제가 아니라 NULL로 끊는다
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE MapMember mm SET mm.inviter = NULL WHERE mm.inviter.userId = :userId")
+    void clearInviterByUserId(@Param("userId") Long userId);
 }

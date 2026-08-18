@@ -1,7 +1,6 @@
 package com.couplemap.user.domain;
 
 import com.couplemap.global.common.BaseEntity;
-import com.couplemap.global.s3.S3UploadDto;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -32,11 +31,7 @@ public class User extends BaseEntity {
     @Column(name = "nickname", length = 10, unique = true)
     private String nickname;
 
-    // 프로필 이미지 등록용 (AWS S3)
-    @Column(name = "profile_image_url", length = 500)
-    private String profileImageUrl;
-
-    // 프로필 이미지 삭제용 (AWS S3)
+    // 접근, 삭제 모두 이 키로 한다. URL은 조회 시점에 서명해서 만들고 저장하지 않는다
     @Column(name = "profile_image_key", length = 200)
     private String profileImageKey;
 
@@ -60,9 +55,8 @@ public class User extends BaseEntity {
         this.friendCode = friendCode;
     }
 
-    public void updateProfileImage(S3UploadDto uploadDto) {
-        this.profileImageUrl = uploadDto.getUrl();
-        this.profileImageKey = uploadDto.getKey();
+    public void updateProfileImageKey(String fileKey) {
+        this.profileImageKey = fileKey;
     }
 
     public void updateProfile(String name, String email) {
@@ -71,7 +65,6 @@ public class User extends BaseEntity {
     }
 
     public void deleteProfileImage() {
-        this.profileImageUrl = null;
         this.profileImageKey = null;
     }
 

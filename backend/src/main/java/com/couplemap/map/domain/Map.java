@@ -24,9 +24,7 @@ public class Map extends BaseEntity {
     @Column(name = "description", length = 20)
     private String description;
 
-    @Column(name = "background_url")
-    private String backgroundUrl;
-
+    // 접근, 삭제 모두 이 키로 한다. URL은 조회 시점에 서명해서 만들고 저장하지 않는다
     @Column(name = "background_key")
     private String backgroundKey;
 
@@ -47,13 +45,11 @@ public class Map extends BaseEntity {
         this.category = category;
     }
 
-    public void updateBackground(String backgroundUrl, String backgroundKey) {
-        this.backgroundUrl = backgroundUrl;
+    public void updateBackgroundKey(String backgroundKey) {
         this.backgroundKey = backgroundKey;
     }
 
     public void deleteBackground() {
-        this.backgroundUrl = null;
         this.backgroundKey = null;
     }
 }

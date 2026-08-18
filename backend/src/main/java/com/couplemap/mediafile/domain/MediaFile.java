@@ -1,14 +1,12 @@
 package com.couplemap.mediafile.domain;
 
 import com.couplemap.global.common.BaseEntity;
-import com.couplemap.global.s3.S3UploadDto;
 import com.couplemap.memory.domain.Memory;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.web.multipart.MultipartFile;
 
 @Entity
 @Getter
@@ -25,11 +23,7 @@ public class MediaFile extends BaseEntity {
     @JoinColumn(name = "memory_id", nullable = false)
     private Memory memory;
 
-    // 파일 접근용
-    @Column(name = "file_url", nullable = false, length = 500)
-    private String fileUrl;
-
-    // 파일 삭제용
+    // 접근, 삭제 모두 이 키로 한다. URL은 조회 시점에 서명해서 만들고 저장하지 않는다
     @Column(name = "file_key", nullable = false, length = 300)
     private String fileKey;
 
@@ -47,9 +41,8 @@ public class MediaFile extends BaseEntity {
     private Integer displayOrder;
 
     @Builder
-    private MediaFile(Memory memory, String fileUrl, String fileKey, String originalFilename, MediaFileType mediaFileType, Long fileSize, Integer displayOrder) {
+    private MediaFile(Memory memory, String fileKey, String originalFilename, MediaFileType mediaFileType, Long fileSize, Integer displayOrder) {
         this.memory = memory;
-        this.fileUrl = fileUrl;
         this.fileKey = fileKey;
         this.originalFilename = originalFilename;
         this.mediaFileType = mediaFileType;
@@ -57,14 +50,14 @@ public class MediaFile extends BaseEntity {
         this.displayOrder = displayOrder;
     }
 
-    public static MediaFile from(Memory memory, S3UploadDto s3Dto, MultipartFile file, MediaFileType type, int order) {
+    public static MediaFile of(Memory memory, String fileKey, String originalFilename,
+                               MediaFileType type, Long fileSize, int order) {
         return MediaFile.builder()
                 .memory(memory)
-                .fileUrl(s3Dto.getUrl())
-                .fileKey(s3Dto.getKey())
-                .originalFilename(file.getOriginalFilename())
+                .fileKey(fileKey)
+                .originalFilename(originalFilename)
                 .mediaFileType(type)
-                .fileSize(file.getSize())
+                .fileSize(fileSize)
                 .displayOrder(order)
                 .build();
     }

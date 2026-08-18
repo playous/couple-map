@@ -4,22 +4,25 @@ import com.couplemap.friend.repository.FriendshipRepository;
 import com.couplemap.global.exception.exceptions.UserException;
 import com.couplemap.global.filecleanup.FileCleanupService;
 import com.couplemap.global.s3.S3Service;
-import com.couplemap.global.s3.S3UploadDto;
+import com.couplemap.global.upload.ImageUploadService;
 import com.couplemap.jwt.repository.RefreshTokenRepository;
 import com.couplemap.map.domain.Map;
 import com.couplemap.map.repository.MapMemberRepository;
 import com.couplemap.map.repository.MapRepository;
 import com.couplemap.mediafile.repository.MediaFileRepository;
 import com.couplemap.user.domain.User;
+import com.couplemap.user.dto.ProfileImageRequestDto;
 import com.couplemap.user.dto.ProfileImageResponseDto;
 import com.couplemap.user.dto.NicknameResponseDto;
 import com.couplemap.user.dto.UserInfoResponseDto;
 import com.couplemap.memory.repository.MemoryRepository;
 import com.couplemap.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.*;
 
@@ -28,6 +31,7 @@ import static com.couplemap.global.exception.code.UserErrorCode.USER_NOT_FOUND;
 import static com.couplemap.map.domain.MapMemberRole.EDITOR;
 import static com.couplemap.map.domain.MapMemberRole.OWNER;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -42,23 +46,25 @@ public class UserServiceImpl implements UserService {
     private final S3Service s3Service;
     private final FileCleanupService fileCleanupService;
     private final MediaFileRepository mediaFileRepository;
+    private final ImageUploadService imageUploadService;
 
     @Transactional
-    public ProfileImageResponseDto updateProfileImage(Long userId, MultipartFile file) {
-        
+    public ProfileImageResponseDto updateProfileImage(Long userId, ProfileImageRequestDto request) {
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
+        String fileKey = imageUploadService.consume(request.getUploadId(), request.getFileKey(), userId);
+
         String oldProfileImageKey = user.getProfileImageKey();
-        S3UploadDto uploadResult = s3Service.uploadImageFile(file);
         if (oldProfileImageKey != null) {
             fileCleanupService.scheduleDelete(oldProfileImageKey);
         }
 
-        user.updateProfileImage(uploadResult);
+        user.updateProfileImageKey(fileKey);
 
         return ProfileImageResponseDto.builder()
-                .imageUrl(user.getProfileImageUrl())
+                .imageUrl(s3Service.getFileUrl(fileKey))
                 .build();
     }
 
@@ -97,7 +103,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
         long memoryCount = memoryRepository.countByUserMaps(userId, List.of(OWNER, EDITOR));
-        return UserInfoResponseDto.from(user, memoryCount);
+        return UserInfoResponseDto.from(user, memoryCount, s3Service::getFileUrl);
     }
 
     @Transactional
@@ -130,21 +136,40 @@ public class UserServiceImpl implements UserService {
         // 4. 참여 중인 지도 멤버 삭제
         mapMemberRepository.deleteAllByUserId(userId);
 
-        // 5. 친구 관계 삭제
+        // 5. 남의 지도에 남긴 초대자 참조 끊기 — 없으면 8번에서 FK 위반으로 탈퇴가 영구 실패
+        mapMemberRepository.clearInviterByUserId(userId);
+
+        // 6. 친구 관계 삭제
         friendshipRepository.deleteAllByUserId(userId);
 
-        // 6. 리프레시 토큰 삭제
-        refreshTokenRepository.deleteById(String.valueOf(userId));
-
-        // 7. 프로필 이미지 S3 삭제
+        // 7. 프로필 이미지 + S3 파일 삭제 일괄 예약
         if (user.getProfileImageKey() != null) {
             fileKeysToDelete.add(user.getProfileImageKey());
         }
-
-        // 8. S3 파일 삭제 일괄 예약
         fileCleanupService.scheduleDeleteAll(new ArrayList<>(fileKeysToDelete));
 
-        // 9. 유저 삭제
+        // 8. 유저 삭제
         userRepository.delete(user);
+
+        // 9. 리프레시 토큰 삭제 — 반드시 커밋이 확정된 뒤에
+        deleteRefreshTokenAfterCommit(userId);
+    }
+
+    // Redis는 롤백이 없으므로 RDB 커밋 확정 후에 지운다 — 실패는 로그만 (계정은 이미 삭제됨, 토큰은 TTL 만료)
+    private void deleteRefreshTokenAfterCommit(Long userId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            refreshTokenRepository.deleteById(String.valueOf(userId));
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    refreshTokenRepository.deleteById(String.valueOf(userId));
+                } catch (Exception e) {
+                    log.error("[userId : {}] 탈퇴 후 리프레시 토큰 삭제 실패 — TTL 만료까지 잔존", userId, e);
+                }
+            }
+        });
     }
 }

@@ -19,4 +19,8 @@ public class UpdateMapRequestDto {
 
     @NotBlank(message = "지도 카테고리는 필수입니다.")
     private String category;
+
+    // 배경 이미지를 바꿀 때만 채운다. /api/uploads/image로 발급받은 값
+    private String uploadId;
+    private String backgroundKey;
 }
