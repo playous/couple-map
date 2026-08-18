@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/network/s3_uploader.dart';
 import '../models/memory_model.dart';
 
 class MemoryRepository {
@@ -55,33 +55,26 @@ class MemoryRepository {
     }
   }
 
-  // 추억 생성
+  // 추억 생성 — 발급 -> S3 직접 업로드 -> 완료 통보
   Future<int> createMemory(
     int mapId,
     Map<String, dynamic> requestData,
     List<File>? imageFiles,
   ) async {
+    final files = imageFiles ?? const <File>[];
+    if (files.isEmpty) {
+      return _createTextMemory(mapId, requestData);
+    }
+
     try {
-      final formData = FormData();
-      formData.files.add(MapEntry(
-        'request',
-        MultipartFile.fromString(
-          jsonEncode(requestData),
-          contentType: DioMediaType.parse('application/json'),
-        ),
-      ));
-      if (imageFiles != null) {
-        for (final file in imageFiles) {
-          formData.files.add(MapEntry(
-            'files',
-            await MultipartFile.fromFile(file.path,
-                filename: file.path.split('/').last),
-          ));
-        }
-      }
+      final issued = await S3Uploader.uploadMemoryFiles(mapId, files);
       final response = await DioClient.instance.post(
-        '/api/maps/$mapId/memories',
-        data: formData,
+        '/api/maps/$mapId/memories/complete',
+        data: {
+          'uploadId': issued.uploadId,
+          'request': requestData,
+          'files': _fileRefs(issued.fileKeys, 1),
+        },
       );
       return response.data['data'] as int;
     } on DioException catch (e) {
@@ -89,6 +82,29 @@ class MemoryRepository {
     }
   }
 
+  // 파일 없는 추억은 전송할 바이트가 없어 presigned가 의미 없다
+  Future<int> _createTextMemory(
+    int mapId,
+    Map<String, dynamic> requestData,
+  ) async {
+    try {
+      final response = await DioClient.instance.post(
+        '/api/maps/$mapId/memories',
+        data: requestData,
+      );
+      return response.data['data'] as int;
+    } on DioException catch (e) {
+      throw DioClient.handleError(e);
+    }
+  }
+
+  List<Map<String, dynamic>> _fileRefs(List<String> fileKeys, int startOrder) {
+    return List.generate(fileKeys.length, (i) {
+      return {'fileKey': fileKeys[i], 'displayOrder': startOrder + i};
+    });
+  }
+
+  // 추억 수정 — 새 파일도 S3에 직접 올리고 키만 보낸다
   Future<void> updateMemory(
     int mapId,
     int memoryId,
@@ -96,26 +112,18 @@ class MemoryRepository {
     List<File>? files,
   ) async {
     try {
-      final formData = FormData();
-      formData.files.add(MapEntry(
-        'request',
-        MultipartFile.fromString(
-          jsonEncode(requestData),
-          contentType: DioMediaType.parse('application/json'),
-        ),
-      ));
-      if (files != null) {
-        for (final file in files) {
-          formData.files.add(MapEntry(
-            'files',
-            await MultipartFile.fromFile(file.path,
-                filename: file.path.split('/').last),
-          ));
-        }
+      final newFiles = files ?? const <File>[];
+      IssuedUpload? issued;
+      if (newFiles.isNotEmpty) {
+        issued = await S3Uploader.uploadMemoryFiles(mapId, newFiles);
       }
       await DioClient.instance.put(
         '/api/maps/$mapId/memories/$memoryId',
-        data: formData,
+        data: {
+          ...requestData,
+          if (issued != null) 'uploadId': issued.uploadId,
+          if (issued != null) 'files': _fileRefs(issued.fileKeys, 1),
+        },
       );
     } on DioException catch (e) {
       throw DioClient.handleError(e);

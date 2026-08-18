@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/network/s3_uploader.dart';
 import '../models/map_card_model.dart';
 
 class HomeRepository {
@@ -16,7 +16,7 @@ class HomeRepository {
     }
   }
 
-  // 지도 생성 (multipart/form-data)
+  // 지도 생성 — 배경은 S3에 직접 올리고 키만 보낸다
   Future<int> createMap(
     String mapName,
     String? description,
@@ -24,23 +24,19 @@ class HomeRepository {
     File? backgroundImage,
   ]) async {
     try {
-      final requestJson = jsonEncode({
-        'mapName': mapName,
-        if (description != null) 'description': description,
-        'category': category,
-      });
-      final formData = FormData.fromMap({
-        'request': MultipartFile.fromString(
-          requestJson,
-          contentType: DioMediaType('application', 'json'),
-        ),
-        if (backgroundImage != null)
-          'backgroundImage': await MultipartFile.fromFile(backgroundImage.path),
-      });
+      IssuedUpload? issued;
+      if (backgroundImage != null) {
+        issued = await S3Uploader.uploadImage(backgroundImage);
+      }
       final response = await DioClient.instance.post(
         '/api/map',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
+        data: {
+          'mapName': mapName,
+          if (description != null) 'description': description,
+          'category': category,
+          if (issued != null) 'uploadId': issued.uploadId,
+          if (issued != null) 'backgroundKey': issued.fileKeys.first,
+        },
       );
       return response.data['data'] as int;
     } on DioException catch (e) {
