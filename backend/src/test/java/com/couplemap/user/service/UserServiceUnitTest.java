@@ -4,7 +4,7 @@ import com.couplemap.friend.repository.FriendshipRepository;
 import com.couplemap.global.exception.exceptions.UserException;
 import com.couplemap.global.filecleanup.FileCleanupService;
 import com.couplemap.global.s3.S3Service;
-import com.couplemap.global.s3.S3UploadDto;
+import com.couplemap.global.upload.ImageUploadService;
 import com.couplemap.jwt.repository.RefreshTokenRepository;
 import com.couplemap.map.domain.Map;
 import com.couplemap.map.domain.MapMemberRole;
@@ -15,6 +15,7 @@ import com.couplemap.memory.repository.MemoryRepository;
 import com.couplemap.user.domain.User;
 import com.couplemap.user.domain.UserRole;
 import com.couplemap.user.dto.NicknameResponseDto;
+import com.couplemap.user.dto.ProfileImageRequestDto;
 import com.couplemap.user.dto.ProfileImageResponseDto;
 import com.couplemap.user.dto.UserInfoResponseDto;
 import com.couplemap.user.repository.UserRepository;
@@ -25,7 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -53,6 +53,7 @@ class UserServiceUnitTest {
     @Mock private S3Service s3Service;
     @Mock private FileCleanupService fileCleanupService;
     @Mock private MediaFileRepository mediaFileRepository;
+    @Mock private ImageUploadService imageUploadService;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -78,45 +79,43 @@ class UserServiceUnitTest {
     // ==================== updateProfileImage ====================
 
     @Test
-    @DisplayName("프로필 이미지 업로드 성공 - 기존 이미지 없음")
+    @DisplayName("프로필 이미지 등록 성공 - 기존 이미지 없음")
     void updateProfileImage_Success_NoExisting() {
-        MockMultipartFile file = new MockMultipartFile("file", "img.jpg", "image/jpeg", "data".getBytes());
-        S3UploadDto uploadResult = S3UploadDto.builder().url("https://s3/new.jpg").key("profile/new.jpg").build();
+        ProfileImageRequestDto request = new ProfileImageRequestDto("upload-1", "profile/new.jpg");
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        when(s3Service.uploadImageFile(file)).thenReturn(uploadResult);
+        when(imageUploadService.consume("upload-1", "profile/new.jpg", 1L)).thenReturn("profile/new.jpg");
+        when(s3Service.getFileUrl("profile/new.jpg")).thenReturn("https://s3/new.jpg?X-Amz-Signature=x");
 
-        ProfileImageResponseDto result = userService.updateProfileImage(1L, file);
+        ProfileImageResponseDto result = userService.updateProfileImage(1L, request);
 
-        assertThat(result.getImageUrl()).isEqualTo("https://s3/new.jpg");
+        assertThat(result.getImageUrl()).contains("X-Amz-Signature");
         verify(fileCleanupService, never()).scheduleDelete(any());
-        assertThat(testUser.getProfileImageUrl()).isEqualTo("https://s3/new.jpg");
+        assertThat(testUser.getProfileImageKey()).isEqualTo("profile/new.jpg");
     }
 
     @Test
-    @DisplayName("프로필 이미지 업로드 성공 - 기존 이미지 삭제 예약")
+    @DisplayName("프로필 이미지 등록 성공 - 기존 이미지 삭제 예약")
     void updateProfileImage_Success_WithExisting() {
         ReflectionTestUtils.setField(testUser, "profileImageKey", "profile/old.jpg");
-        ReflectionTestUtils.setField(testUser, "profileImageUrl", "https://s3/old.jpg");
 
-        MockMultipartFile file = new MockMultipartFile("file", "img.jpg", "image/jpeg", "data".getBytes());
-        S3UploadDto uploadResult = S3UploadDto.builder().url("https://s3/new.jpg").key("profile/new.jpg").build();
+        ProfileImageRequestDto request = new ProfileImageRequestDto("upload-1", "profile/new.jpg");
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        when(s3Service.uploadImageFile(file)).thenReturn(uploadResult);
+        when(imageUploadService.consume("upload-1", "profile/new.jpg", 1L)).thenReturn("profile/new.jpg");
 
-        userService.updateProfileImage(1L, file);
+        userService.updateProfileImage(1L, request);
 
         verify(fileCleanupService).scheduleDelete("profile/old.jpg");
     }
 
     @Test
-    @DisplayName("프로필 이미지 업로드 실패 - 유저 없음")
+    @DisplayName("프로필 이미지 등록 실패 - 유저 없음")
     void updateProfileImage_UserNotFound() {
-        MockMultipartFile file = new MockMultipartFile("file", "img.jpg", "image/jpeg", "data".getBytes());
+        ProfileImageRequestDto request = new ProfileImageRequestDto("upload-1", "profile/new.jpg");
         when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.updateProfileImage(99L, file))
+        assertThatThrownBy(() -> userService.updateProfileImage(99L, request))
                 .isInstanceOf(UserException.class)
                 .hasMessage(USER_NOT_FOUND.getMessage());
     }
@@ -127,14 +126,12 @@ class UserServiceUnitTest {
     @DisplayName("프로필 이미지 삭제 성공")
     void deleteProfileImage_Success() {
         ReflectionTestUtils.setField(testUser, "profileImageKey", "profile/old.jpg");
-        ReflectionTestUtils.setField(testUser, "profileImageUrl", "https://s3/old.jpg");
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
 
         userService.deleteProfileImage(1L);
 
         verify(fileCleanupService).scheduleDelete("profile/old.jpg");
         assertThat(testUser.getProfileImageKey()).isNull();
-        assertThat(testUser.getProfileImageUrl()).isNull();
     }
 
     @Test

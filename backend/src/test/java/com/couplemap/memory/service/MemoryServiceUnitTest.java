@@ -2,10 +2,10 @@ package com.couplemap.memory.service;
 
 import com.couplemap.global.exception.exceptions.MapException;
 import com.couplemap.global.exception.exceptions.MemoryException;
+import com.couplemap.global.exception.exceptions.S3Exception;
 import com.couplemap.global.exception.exceptions.UserException;
 import com.couplemap.global.filecleanup.FileCleanupService;
 import com.couplemap.global.s3.S3Service;
-import com.couplemap.global.s3.S3UploadDto;
 import com.couplemap.map.domain.Map;
 import com.couplemap.map.domain.MapMember;
 import com.couplemap.map.domain.MapMemberRole;
@@ -15,8 +15,10 @@ import com.couplemap.mediafile.domain.MediaFile;
 import com.couplemap.mediafile.domain.MediaFileType;
 import com.couplemap.mediafile.repository.MediaFileRepository;
 import com.couplemap.memory.domain.Memory;
+import com.couplemap.memory.domain.UploadSession;
 import com.couplemap.memory.dto.*;
 import com.couplemap.memory.repository.MemoryRepository;
+import com.couplemap.memory.repository.UploadSessionRepository;
 import com.couplemap.user.domain.User;
 import com.couplemap.user.domain.UserRole;
 import com.couplemap.user.repository.UserRepository;
@@ -30,7 +32,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -58,6 +59,7 @@ class MemoryServiceUnitTest {
     @Mock private S3Service s3Service;
     @Mock private FileCleanupService fileCleanupService;
     @Mock private MediaFileRepository mediaFileRepository;
+    @Mock private UploadSessionRepository uploadSessionRepository;
 
     @InjectMocks
     private MemoryServiceImpl memoryService;
@@ -116,7 +118,7 @@ class MemoryServiceUnitTest {
             return m;
         });
 
-        Long result = memoryService.createMemory(10L, request, null, 1L);
+        Long result = memoryService.createMemory(10L, request, 1L);
 
         assertThat(result).isEqualTo(200L);
         verify(memoryRepository).save(any(Memory.class));
@@ -124,24 +126,70 @@ class MemoryServiceUnitTest {
     }
 
     @Test
-    @DisplayName("추억 생성 성공 - 파일 포함")
-    void createMemory_Success_WithFiles() {
+    @DisplayName("완료 통보 성공 - 세션의 fileKey로 MediaFile을 만든다")
+    void completeUpload_Success() {
         CreateMemoryRequestDto request = new CreateMemoryRequestDto(
                 "새 추억", "내용", "장소", null,
                 LocalDate.of(2024, 3, 15),
                 new BigDecimal("37.1234"), new BigDecimal("127.5678"), null);
-        MockMultipartFile file = new MockMultipartFile("file", "test.jpg", "image/jpeg", "data".getBytes());
+
+        UploadSession session = UploadSession.of("upload-1", 1L, 10L, UploadSession.PURPOSE_MEMORY,
+                List.of(new UploadSession.UploadFile("memory/a.jpg", "a.jpg", "image/jpeg", 1024L)), 3600);
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
         when(mapRepository.findById(10L)).thenReturn(Optional.of(testMap));
         when(memoryRepository.save(any(Memory.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(s3Service.uploadMediaFile(file)).thenReturn(S3UploadDto.builder().url("url").key("key").build());
+        when(uploadSessionRepository.findById("upload-1")).thenReturn(Optional.of(session));
 
-        memoryService.createMemory(10L, request, List.of(file), 1L);
+        memoryService.completeUpload(10L, new CompleteUploadRequestDto("upload-1", request,
+                List.of(new CompleteUploadRequestDto.FileRef("memory/a.jpg", 1))), 1L);
 
-        verify(s3Service).uploadMediaFile(file);
-        verify(mediaFileRepository).save(any(MediaFile.class));
+        verify(mediaFileRepository).saveAll(anyList());
+        // 실제로 쓴 키는 고아 회수 예약을 푼다
+        verify(fileCleanupService).cancelPendingUpload(List.of("memory/a.jpg"));
+        verify(uploadSessionRepository).deleteById("upload-1");
+    }
+
+    @Test
+    @DisplayName("완료 통보 실패 - 세션에 없는 fileKey는 거부한다")
+    void completeUpload_ForeignKeyRejected() {
+        CreateMemoryRequestDto request = new CreateMemoryRequestDto(
+                "새 추억", "내용", "장소", null,
+                LocalDate.of(2024, 3, 15),
+                new BigDecimal("37.1234"), new BigDecimal("127.5678"), null);
+
+        UploadSession session = UploadSession.of("upload-1", 1L, 10L, UploadSession.PURPOSE_MEMORY,
+                List.of(new UploadSession.UploadFile("memory/a.jpg", "a.jpg", "image/jpeg", 1024L)), 3600);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
+        when(mapRepository.findById(10L)).thenReturn(Optional.of(testMap));
+        when(memoryRepository.save(any(Memory.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(uploadSessionRepository.findById("upload-1")).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> memoryService.completeUpload(10L,
+                new CompleteUploadRequestDto("upload-1", request,
+                        List.of(new CompleteUploadRequestDto.FileRef("memory/stolen.jpg", 1))), 1L))
+                .isInstanceOf(S3Exception.class);
+    }
+
+    @Test
+    @DisplayName("완료 통보 실패 - 만료된 세션")
+    void completeUpload_SessionNotFound() {
+        CreateMemoryRequestDto request = new CreateMemoryRequestDto(
+                "새 추억", "내용", "장소", null,
+                LocalDate.of(2024, 3, 15),
+                new BigDecimal("37.1234"), new BigDecimal("127.5678"), null);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
+        when(mapRepository.findById(10L)).thenReturn(Optional.of(testMap));
+        when(uploadSessionRepository.findById("gone")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memoryService.completeUpload(10L,
+                new CompleteUploadRequestDto("gone", request, List.of()), 1L))
+                .isInstanceOf(S3Exception.class);
     }
 
     @Test
@@ -153,7 +201,7 @@ class MemoryServiceUnitTest {
 
         when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> memoryService.createMemory(10L, request, null, 99L))
+        assertThatThrownBy(() -> memoryService.createMemory(10L, request, 99L))
                 .isInstanceOf(UserException.class)
                 .hasMessage(USER_NOT_FOUND.getMessage());
     }
@@ -168,7 +216,7 @@ class MemoryServiceUnitTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> memoryService.createMemory(10L, request, null, 1L))
+        assertThatThrownBy(() -> memoryService.createMemory(10L, request, 1L))
                 .isInstanceOf(MapException.class)
                 .hasMessage(NOT_MAP_MEMBER.getMessage());
     }
@@ -184,7 +232,7 @@ class MemoryServiceUnitTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(pendingMember));
 
-        assertThatThrownBy(() -> memoryService.createMemory(10L, request, null, 1L))
+        assertThatThrownBy(() -> memoryService.createMemory(10L, request, 1L))
                 .isInstanceOf(MapException.class)
                 .hasMessage(NOT_MAP_MEMBER.getMessage());
     }
@@ -200,7 +248,7 @@ class MemoryServiceUnitTest {
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
         when(mapRepository.findById(10L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> memoryService.createMemory(10L, request, null, 1L))
+        assertThatThrownBy(() -> memoryService.createMemory(10L, request, 1L))
                 .isInstanceOf(MapException.class);
     }
 
@@ -210,7 +258,7 @@ class MemoryServiceUnitTest {
     @DisplayName("추억 삭제 성공 - fileCleanupService 호출 검증")
     void deleteMemory_Success() {
         MediaFile mf = MediaFile.builder()
-                .fileUrl("url").fileKey("media/key1").originalFilename("test.jpg")
+                .fileKey("media/key1").originalFilename("test.jpg")
                 .mediaFileType(MediaFileType.IMAGE).fileSize(100L).displayOrder(1)
                 .build();
 
@@ -263,49 +311,57 @@ class MemoryServiceUnitTest {
     @DisplayName("추억 수정 성공 - 파일 삭제 + 새 파일 추가")
     void updateMemory_Success_DeleteAndAddFiles() {
         MediaFile existingFile = MediaFile.builder()
-                .fileUrl("url1").fileKey("old/key").originalFilename("old.jpg")
+                .fileKey("old/key").originalFilename("old.jpg")
                 .mediaFileType(MediaFileType.IMAGE).fileSize(100L).displayOrder(1)
                 .build();
         ReflectionTestUtils.setField(existingFile, "mediaFileId", 50L);
 
+        UploadSession session = UploadSession.of("upload-1", 1L, 10L, UploadSession.PURPOSE_MEMORY,
+                List.of(new UploadSession.UploadFile("memory/new.jpg", "new.jpg", "image/jpeg", 1024L)), 3600);
+
         UpdateMemoryRequestDto request = new UpdateMemoryRequestDto(
                 "수정 제목", "수정 내용", "수정 장소",
-                LocalDate.of(2024, 5, 1), null, List.of(50L));
-        MockMultipartFile newFile = new MockMultipartFile("file", "new.jpg", "image/jpeg", "data".getBytes());
+                LocalDate.of(2024, 5, 1), null, List.of(50L),
+                "upload-1", List.of(new CompleteUploadRequestDto.FileRef("memory/new.jpg", 1)));
 
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
         when(memoryRepository.findById(100L)).thenReturn(Optional.of(testMemory));
         when(mediaFileRepository.findAllByIdsAndMemoryId(List.of(50L), 100L)).thenReturn(List.of(existingFile));
         when(mediaFileRepository.findByMemoryIdOrderByDisplayOrder(100L)).thenReturn(List.of());
-        when(s3Service.uploadMediaFile(newFile)).thenReturn(S3UploadDto.builder().url("newUrl").key("new/key").build());
+        when(uploadSessionRepository.findById("upload-1")).thenReturn(Optional.of(session));
 
-        Long result = memoryService.updateMemory(10L, 100L, request, List.of(newFile), 1L);
+        Long result = memoryService.updateMemory(10L, 100L, request, 1L);
 
         assertThat(result).isEqualTo(100L);
         verify(fileCleanupService).scheduleDeleteAll(List.of("old/key"));
         verify(mediaFileRepository).deleteAll(List.of(existingFile));
         verify(mediaFileRepository).saveAll(anyList());
+        verify(fileCleanupService).cancelPendingUpload(List.of("memory/new.jpg"));
     }
 
     @Test
     @DisplayName("추억 수정 성공 - displayOrder 이어붙기")
     void updateMemory_Success_DisplayOrderContinues() {
         MediaFile existing = MediaFile.builder()
-                .fileUrl("url").fileKey("key").originalFilename("a.jpg")
+                .fileKey("key").originalFilename("a.jpg")
                 .mediaFileType(MediaFileType.IMAGE).fileSize(100L).displayOrder(3)
                 .build();
 
+        UploadSession session = UploadSession.of("upload-1", 1L, 10L, UploadSession.PURPOSE_MEMORY,
+                List.of(new UploadSession.UploadFile("memory/b.jpg", "b.jpg", "image/jpeg", 1024L)), 3600);
+
         UpdateMemoryRequestDto request = new UpdateMemoryRequestDto(
-                "수정", null, "장소", LocalDate.now(), null, null);
-        MockMultipartFile newFile = new MockMultipartFile("file", "b.jpg", "image/jpeg", "data".getBytes());
+                "수정", null, "장소", LocalDate.now(), null, null,
+                "upload-1", List.of(new CompleteUploadRequestDto.FileRef("memory/b.jpg", 1)));
 
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
         when(memoryRepository.findById(100L)).thenReturn(Optional.of(testMemory));
         when(mediaFileRepository.findByMemoryIdOrderByDisplayOrder(100L)).thenReturn(List.of(existing));
-        when(s3Service.uploadMediaFile(newFile)).thenReturn(S3UploadDto.builder().url("url2").key("key2").build());
+        when(uploadSessionRepository.findById("upload-1")).thenReturn(Optional.of(session));
 
-        memoryService.updateMemory(10L, 100L, request, List.of(newFile), 1L);
+        memoryService.updateMemory(10L, 100L, request, 1L);
 
+        // 요청의 displayOrder가 아니라 기존 최대값 다음부터 매긴다
         verify(mediaFileRepository).saveAll(argThat(files -> {
             List<MediaFile> list = (List<MediaFile>) files;
             return list.size() == 1 && list.get(0).getDisplayOrder() == 4;
@@ -316,12 +372,12 @@ class MemoryServiceUnitTest {
     @DisplayName("추억 수정 실패 - 작성자 아님")
     void updateMemory_NotAuthor() {
         UpdateMemoryRequestDto request = new UpdateMemoryRequestDto(
-                "수정", null, "장소", LocalDate.now(), null, null);
+                "수정", null, "장소", LocalDate.now(), null, null, null, null);
 
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 2L)).thenReturn(Optional.of(editorMember));
         when(memoryRepository.findById(100L)).thenReturn(Optional.of(testMemory));
 
-        assertThatThrownBy(() -> memoryService.updateMemory(10L, 100L, request, null, 2L))
+        assertThatThrownBy(() -> memoryService.updateMemory(10L, 100L, request, 2L))
                 .isInstanceOf(MemoryException.class)
                 .hasMessage(NO_PERMISSION_TO_UPDATE.getMessage());
     }
@@ -338,12 +394,12 @@ class MemoryServiceUnitTest {
         ReflectionTestUtils.setField(otherMemory, "memoryId", 200L);
 
         UpdateMemoryRequestDto request = new UpdateMemoryRequestDto(
-                "수정", null, "장소", LocalDate.now(), null, null);
+                "수정", null, "장소", LocalDate.now(), null, null, null, null);
 
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
         when(memoryRepository.findById(200L)).thenReturn(Optional.of(otherMemory));
 
-        assertThatThrownBy(() -> memoryService.updateMemory(10L, 200L, request, null, 1L))
+        assertThatThrownBy(() -> memoryService.updateMemory(10L, 200L, request, 1L))
                 .isInstanceOf(MemoryException.class)
                 .hasMessage(MEMORY_NOT_FOUND.getMessage());
     }
@@ -352,13 +408,13 @@ class MemoryServiceUnitTest {
     @DisplayName("추억 수정 실패 - 잘못된 deleteFileIds")
     void updateMemory_InvalidDeleteFileIds() {
         UpdateMemoryRequestDto request = new UpdateMemoryRequestDto(
-                "수정", null, "장소", LocalDate.now(), null, List.of(50L, 51L));
+                "수정", null, "장소", LocalDate.now(), null, List.of(50L, 51L), null, null);
 
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
         when(memoryRepository.findById(100L)).thenReturn(Optional.of(testMemory));
         when(mediaFileRepository.findAllByIdsAndMemoryId(List.of(50L, 51L), 100L)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> memoryService.updateMemory(10L, 100L, request, null, 1L))
+        assertThatThrownBy(() -> memoryService.updateMemory(10L, 100L, request, 1L))
                 .isInstanceOf(MemoryException.class)
                 .hasMessage(INVALID_MEDIA_FILE.getMessage());
     }
