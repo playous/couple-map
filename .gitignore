@@ -38,3 +38,7 @@ out/
 
 ### VS Code ###
 .vscode/
+# 부하 테스트 결과 — 로컬 보관, git 미추적
+results/
+results-archive/
+!results/.gitkeep
