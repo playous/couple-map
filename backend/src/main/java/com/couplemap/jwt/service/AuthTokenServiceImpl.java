@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import static com.couplemap.global.exception.code.JwtErrorCode.*;
 
@@ -33,7 +32,6 @@ public class AuthTokenServiceImpl implements AuthTokenService {
     /**
      * 토큰 생성 및 저장 (최초 로그인 시)
      */
-    @Transactional
     public LoginTokenResponseDto generateTokens(Long userId, String username, String role, boolean isNicknameSet) {
 
         String accessToken = jwtUtil.createJwt("access", username, role, userId, ACCESS_TOKEN_EXPIRATION);
@@ -42,7 +40,7 @@ public class AuthTokenServiceImpl implements AuthTokenService {
         RefreshToken token = RefreshToken.of(userId, refreshToken, REFRESH_TOKEN_EXPIRATION);
         refreshTokenRepository.save(token);
 
-        log.info("[userId : {}] 토큰 생성 완료", userId);
+        log.debug("[userId : {}] 토큰 생성 완료", userId);
 
         return LoginTokenResponseDto.builder()
                 .accessToken(accessToken)
@@ -55,7 +53,6 @@ public class AuthTokenServiceImpl implements AuthTokenService {
     /**
      * Access Token 재발급 (Refresh Token은 재사용)
      */
-    @Transactional(readOnly = true)
     public TokenResponseDto refreshTokens(String authHeader) {
 
         String refreshToken = tokenExtractor.extractToken(authHeader);
@@ -68,7 +65,7 @@ public class AuthTokenServiceImpl implements AuthTokenService {
 
         String accessToken = jwtUtil.createJwt("access", username, role, userId, ACCESS_TOKEN_EXPIRATION);
 
-        log.info("[userId : {}] Access Token 재발급 완료", userId);
+        log.debug("[userId : {}] Access Token 재발급 완료", userId);
 
         return TokenResponseDto.builder()
                 .accessToken(accessToken)
@@ -80,12 +77,11 @@ public class AuthTokenServiceImpl implements AuthTokenService {
     /**
      * 로그아웃
      */
-    @Transactional
     public void logout(Long userId) {
 
         refreshTokenRepository.deleteById(String.valueOf(userId));
 
-        log.info("[userId : {}] 로그아웃 완료", userId);
+        log.debug("[userId : {}] 로그아웃 완료", userId);
     }
 
 
