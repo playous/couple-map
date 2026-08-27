@@ -17,7 +17,8 @@ import java.time.LocalDate;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "memories")
+@Table(name = "memories", indexes =
+        @Index(name = "idx_memories_map_id_memory_date", columnList = "map_id, memory_date"))
 public class Memory extends BaseEntity {
 
     @Id
@@ -26,11 +27,11 @@ public class Memory extends BaseEntity {
     private Long memoryId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "map_id", nullable = false)
+    @JoinColumn(name = "map_id", nullable = false, foreignKey = @ForeignKey(name = "fk_memories_map"))
     private Map map;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_memories_user"))
     private User user;
 
     @Column(name = "title", nullable = false, length = 50)
