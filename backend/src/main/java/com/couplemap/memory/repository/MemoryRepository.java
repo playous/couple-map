@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -21,9 +22,10 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
             "JOIN MapMember mm ON m.map = mm.map " +
             "WHERE mm.user.userId = :userId " +
             "AND mm.mapMemberRole IN :roles " +
-            "AND YEAR(m.memoryDate) = :year " +
+            "AND m.memoryDate BETWEEN :from AND :to " +
             "ORDER BY m.memoryDate ASC")
-    List<Memory> findAllByUserIdAndYear(@Param("userId") Long userId, @Param("year") int year,
+    List<Memory> findAllByUserIdAndYear(@Param("userId") Long userId,
+                                        @Param("from") LocalDate from, @Param("to") LocalDate to,
                                         @Param("roles") List<MapMemberRole> roles);
 
     @Query("SELECT COUNT(m) FROM Memory m " +

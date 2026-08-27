@@ -12,7 +12,7 @@ import static com.couplemap.global.exception.code.FriendErrorCode.NOT_MATCH_RECE
 
 @Getter
 @Entity
-@Table(name = "friendships", uniqueConstraints = @UniqueConstraint(columnNames = "friend_pair_key"))
+@Table(name = "friendships", uniqueConstraints = @UniqueConstraint(name = "uk_friendships_friend_pair_key", columnNames = "friend_pair_key"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Builder(access = AccessLevel.PRIVATE)
 @AllArgsConstructor
@@ -25,19 +25,19 @@ public class Friendship extends BaseEntity {
 
     // 친구 요청 보낸 사람
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "requester_id", nullable = false)
+    @JoinColumn(name = "requester_id", nullable = false, foreignKey = @ForeignKey(name = "fk_friendships_requester"))
     private User requester;
 
     // 친구 요청 받은 사람
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "receiver_id", nullable = false)
+    @JoinColumn(name = "receiver_id", nullable = false, foreignKey = @ForeignKey(name = "fk_friendships_receiver"))
     private User receiver;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private FriendshipStatus status;
 
-    @Column(name = "friend_pair_key", nullable = false, length = 50, unique = true)
+    @Column(name = "friend_pair_key", nullable = false, length = 50)
     private String friendPairKey;
 
     public static Friendship createRequest(User requester, User receiver) {

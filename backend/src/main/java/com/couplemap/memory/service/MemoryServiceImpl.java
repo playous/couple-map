@@ -41,6 +41,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -339,7 +340,10 @@ public class MemoryServiceImpl implements MemoryService {
 
     @Override
     public List<CalendarMemoryResponseDto> getCalendarMemories(int year, Long userId) {
-        List<Memory> memories = memoryRepository.findAllByUserIdAndYear(userId, year, List.of(OWNER, EDITOR));
+        // 컬럼에 YEAR()를 씌우면 인덱스를 못 타므로 범위로 바꿔서 넘긴다
+        LocalDate from = LocalDate.of(year, 1, 1);
+        LocalDate to = LocalDate.of(year, 12, 31);
+        List<Memory> memories = memoryRepository.findAllByUserIdAndYear(userId, from, to, List.of(OWNER, EDITOR));
 
         List<Long> memoryIds = memories.stream().map(Memory::getMemoryId).collect(Collectors.toList());
 

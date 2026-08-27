@@ -20,7 +20,7 @@ public class MediaFile extends BaseEntity {
     private Long mediaFileId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "memory_id", nullable = false)
+    @JoinColumn(name = "memory_id", nullable = false, foreignKey = @ForeignKey(name = "fk_media_files_memory"))
     private Memory memory;
 
     // 접근, 삭제 모두 이 키로 한다. URL은 조회 시점에 서명해서 만들고 저장하지 않는다
