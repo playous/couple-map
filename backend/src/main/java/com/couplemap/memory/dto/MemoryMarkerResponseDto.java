@@ -9,7 +9,6 @@ import java.time.LocalDate;
 @Getter
 public class MemoryMarkerResponseDto {
     private final Long memoryId;
-    private final String title;
     private final BigDecimal latitude;
     private final BigDecimal longitude;
     private final String category;
@@ -17,7 +16,6 @@ public class MemoryMarkerResponseDto {
 
     public MemoryMarkerResponseDto(Memory memory) {
         this.memoryId = memory.getMemoryId();
-        this.title = memory.getTitle();
         this.latitude = memory.getLatitude();
         this.longitude = memory.getLongitude();
         this.category = memory.getCategory();
