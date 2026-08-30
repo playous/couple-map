@@ -134,7 +134,7 @@ class UserServiceImplTest {
 
         assertThat(userRepository.findById(userId)).isEmpty();
         assertThat(mapRepository.findById(mapId)).isEmpty();
-        assertThat(memoryRepository.findAllByMap_MapId(mapId)).isEmpty();
+        assertThat(memoryRepository.findMarkersByMapId(mapId)).isEmpty();
         assertThat(friendshipRepository.findFriendsWhereRequester(userId, FriendshipStatus.PENDING)).isEmpty();
 
         testUser = null;

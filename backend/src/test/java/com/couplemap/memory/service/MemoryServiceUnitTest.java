@@ -478,12 +478,14 @@ class MemoryServiceUnitTest {
     @DisplayName("추억 마커 조회 성공")
     void getMemoryMarkers_Success() {
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
-        when(memoryRepository.findAllByMap_MapId(10L)).thenReturn(List.of(testMemory));
+        when(memoryRepository.findMarkersByMapId(10L)).thenReturn(List.of(
+                new MemoryMarkerResponseDto(100L, new BigDecimal("37.5665"), new BigDecimal("126.9780"),
+                        "카페", LocalDate.of(2024, 1, 1))));
 
         List<MemoryMarkerResponseDto> result = memoryService.getMemoryMarkers(10L, 1L);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getTitle()).isEqualTo("테스트 추억");
+        assertThat(result.get(0).getMemoryId()).isEqualTo(100L);
         assertThat(result.get(0).getLatitude()).isEqualByComparingTo(new BigDecimal("37.5665"));
     }
 

@@ -209,10 +209,8 @@ public class MemoryServiceImpl implements MemoryService {
         // 1. 권한 검증
         validateActiveMember(mapId, userId);
 
-        // 2. 좌표만 조회
-        return memoryRepository.findAllByMap_MapId(mapId).stream()
-                .map(MemoryMarkerResponseDto::new)
-                .collect(Collectors.toList());
+        // 2. 좌표만 조회 (DTO 프로젝션, 엔티티 로딩 없음)
+        return memoryRepository.findMarkersByMapId(mapId);
     }
 
     public MemoryDetailResponseDto getMemoryDetail(Long mapId, Long memoryId, Long userId) {

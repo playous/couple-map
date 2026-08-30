@@ -2,6 +2,7 @@ package com.couplemap.memory.repository;
 
 import com.couplemap.map.domain.MapMemberRole;
 import com.couplemap.memory.domain.Memory;
+import com.couplemap.memory.dto.MemoryMarkerResponseDto;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,7 +15,11 @@ import java.util.List;
 
 @Repository
 public interface MemoryRepository extends JpaRepository<Memory, Long> {
-    List<Memory> findAllByMap_MapId(Long mapId);
+    // 마커는 5개 필드만 쓰므로 엔티티 대신 DTO로 바로 뽑는다. 커버링 인덱스와 함께 본문 접근 없이 동작
+    @Query("SELECT new com.couplemap.memory.dto.MemoryMarkerResponseDto(" +
+            "m.memoryId, m.latitude, m.longitude, m.category, m.memoryDate) " +
+            "FROM Memory m WHERE m.map.mapId = :mapId")
+    List<MemoryMarkerResponseDto> findMarkersByMapId(@Param("mapId") Long mapId);
 
     Slice<Memory> findByMap_MapId(Long mapId, Pageable pageable);
 
