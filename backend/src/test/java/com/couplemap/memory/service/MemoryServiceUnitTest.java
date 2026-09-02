@@ -429,7 +429,7 @@ class MemoryServiceUnitTest {
 
         when(mapMemberRepository.findByMap_MapIdAndUser_UserId(10L, 1L)).thenReturn(Optional.of(ownerMember));
         when(memoryRepository.findByMap_MapId(10L, pageable)).thenReturn(slice);
-        when(mediaFileRepository.findByMemoryIdIn(List.of(100L))).thenReturn(List.of());
+        when(mediaFileRepository.findThumbnailsByMemoryIds(List.of(100L))).thenReturn(List.of());
 
         Slice<MemoryListResponseDto> result = memoryService.getMemoryList(10L, 1L, pageable);
 
