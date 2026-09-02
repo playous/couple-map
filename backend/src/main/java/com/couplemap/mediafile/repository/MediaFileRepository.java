@@ -19,9 +19,11 @@ public interface MediaFileRepository extends JpaRepository<MediaFile, Long> {
     List<MediaFile> findByMemoryIdOrderByDisplayOrder(@Param("memoryId") Long memoryId);
 
     // 목록, 캘린더 썸네일용. 추억당 displayOrder 최소 1장만 반환해 불필요한 행 로딩을 막는다
+    // 추억별 MIN을 파생 테이블에서 한 번에 집계한다. 행마다 서브쿼리를 실행하던 종속 서브쿼리는 캘린더 135건에서 540회 돌았다
     @Query("SELECT mf FROM MediaFile mf " +
-            "WHERE mf.memory.memoryId IN :memoryIds " +
-            "AND mf.displayOrder = (SELECT MIN(mf2.displayOrder) FROM MediaFile mf2 WHERE mf2.memory = mf.memory)")
+            "JOIN (SELECT mf2.memory.memoryId AS memoryId, MIN(mf2.displayOrder) AS minOrder " +
+            "      FROM MediaFile mf2 WHERE mf2.memory.memoryId IN :memoryIds GROUP BY mf2.memory.memoryId) t " +
+            "ON mf.memory.memoryId = t.memoryId AND mf.displayOrder = t.minOrder")
     List<MediaFile> findThumbnailsByMemoryIds(@Param("memoryIds") List<Long> memoryIds);
 
     @Query("SELECT mf.fileKey FROM MediaFile mf WHERE mf.memory.user.userId = :userId")
