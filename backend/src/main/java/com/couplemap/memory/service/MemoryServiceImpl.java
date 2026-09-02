@@ -187,14 +187,13 @@ public class MemoryServiceImpl implements MemoryService {
         Slice<Memory> memorySlice = memoryRepository.findByMap_MapId(mapId, pageable);
         List<Memory> memories = memorySlice.getContent();
 
-        // 3. 썸네일 일괄 조회
+        // 3. 썸네일 일괄 조회 (추억당 1장만, 전체 미디어 로딩 없음)
         List<Long> memoryIds = memories.stream().map(Memory::getMemoryId).collect(Collectors.toList());
 
-        java.util.Map<Long, String> thumbnailMap = mediaFileRepository.findByMemoryIdIn(memoryIds).stream()
+        java.util.Map<Long, String> thumbnailMap = mediaFileRepository.findThumbnailsByMemoryIds(memoryIds).stream()
                 .collect(Collectors.toMap(
                         mf -> mf.getMemory().getMemoryId(),
-                        mf -> s3Service.getFileUrl(mf.getFileKey()),
-                        (existing, replacement) -> existing
+                        mf -> s3Service.getFileUrl(mf.getFileKey())
                 ));
 
         List<MemoryListResponseDto> content = memories.stream()
@@ -349,11 +348,11 @@ public class MemoryServiceImpl implements MemoryService {
             return List.of();
         }
 
-        java.util.Map<Long, String> thumbnailMap = mediaFileRepository.findByMemoryIdIn(memoryIds).stream()
+        // 썸네일 일괄 조회 (추억당 1장만, 전체 미디어 로딩 없음)
+        java.util.Map<Long, String> thumbnailMap = mediaFileRepository.findThumbnailsByMemoryIds(memoryIds).stream()
                 .collect(Collectors.toMap(
                         mf -> mf.getMemory().getMemoryId(),
-                        mf -> s3Service.getFileUrl(mf.getFileKey()),
-                        (existing, replacement) -> existing
+                        mf -> s3Service.getFileUrl(mf.getFileKey())
                 ));
 
         return memories.stream()
