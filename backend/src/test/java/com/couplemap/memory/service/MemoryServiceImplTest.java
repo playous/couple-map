@@ -1,6 +1,7 @@
 package com.couplemap.memory.service;
 
 import com.couplemap.friend.repository.FriendshipRepository;
+import com.couplemap.global.exception.exceptions.MemoryException;
 import com.couplemap.map.domain.Map;
 import com.couplemap.map.domain.MapMember;
 import com.couplemap.map.domain.MapMemberRole;
@@ -18,6 +19,8 @@ import com.couplemap.memory.repository.MemoryRepository;
 import com.couplemap.user.domain.User;
 import com.couplemap.user.domain.UserRole;
 import com.couplemap.user.repository.UserRepository;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -122,13 +125,58 @@ class MemoryServiceImplTest {
                 new BigDecimal("37.5555"), new BigDecimal("126.9999"), null
         ), testUser.getUserId());
 
-        List<CalendarMemoryResponseDto> result2024 = memoryService.getCalendarMemories(2024, testUser.getUserId());
+        List<CalendarMemoryResponseDto> result2024 = memoryService.getCalendarMemories(2024, null, testUser.getUserId());
 
         assertThat(result2024).hasSize(2);
         assertThat(result2024).extracting("title")
                 .containsExactlyInAnyOrder("테스트 추억", "2024 추억");
         assertThat(result2024).allSatisfy(dto ->
                 assertThat(dto.getMemoryDate().getYear()).isEqualTo(2024));
+    }
+
+    @Test
+    @DisplayName("통합: 캘린더 조회 - month를 주면 해당 월만 반환")
+    void getCalendarMemories_FilterByMonth() {
+        memoryService.createMemory(testMap.getMapId(), new CreateMemoryRequestDto(
+                "6월 추억", null, "장소", null,
+                LocalDate.of(2024, 6, 15),
+                new BigDecimal("37.1234"), new BigDecimal("127.5678"), null
+        ), testUser.getUserId());
+
+        memoryService.createMemory(testMap.getMapId(), new CreateMemoryRequestDto(
+                "7월 추억", null, "장소", null,
+                LocalDate.of(2024, 7, 1),
+                new BigDecimal("37.5555"), new BigDecimal("126.9999"), null
+        ), testUser.getUserId());
+
+        List<CalendarMemoryResponseDto> june = memoryService.getCalendarMemories(2024, 6, testUser.getUserId());
+
+        assertThat(june).extracting("title").containsExactly("6월 추억");
+        assertThat(june).allSatisfy(dto ->
+                assertThat(dto.getMemoryDate().getMonthValue()).isEqualTo(6));
+    }
+
+    @Test
+    @DisplayName("통합: 캘린더 조회 - 말일이 포함된다")
+    void getCalendarMemories_IncludesLastDayOfMonth() {
+        memoryService.createMemory(testMap.getMapId(), new CreateMemoryRequestDto(
+                "2월 말일 추억", null, "장소", null,
+                LocalDate.of(2024, 2, 29),
+                new BigDecimal("37.1234"), new BigDecimal("127.5678"), null
+        ), testUser.getUserId());
+
+        List<CalendarMemoryResponseDto> february = memoryService.getCalendarMemories(2024, 2, testUser.getUserId());
+
+        assertThat(february).extracting("title").contains("2월 말일 추억");
+    }
+
+    @Test
+    @DisplayName("통합: 캘린더 조회 - 범위를 벗어난 month는 400")
+    void getCalendarMemories_InvalidMonth() {
+        assertThrows(MemoryException.class,
+                () -> memoryService.getCalendarMemories(2024, 13, testUser.getUserId()));
+        assertThrows(MemoryException.class,
+                () -> memoryService.getCalendarMemories(2024, 0, testUser.getUserId()));
     }
 
     @Test
@@ -140,7 +188,7 @@ class MemoryServiceImplTest {
                 .build());
         mapMemberRepository.save(MapMember.from(testMap, pendingUser, MapMemberRole.PENDING));
 
-        List<CalendarMemoryResponseDto> result = memoryService.getCalendarMemories(2024, pendingUser.getUserId());
+        List<CalendarMemoryResponseDto> result = memoryService.getCalendarMemories(2024, null, pendingUser.getUserId());
 
         assertThat(result).isEmpty();
     }
@@ -157,7 +205,7 @@ class MemoryServiceImplTest {
                 new BigDecimal("35.1234"), new BigDecimal("129.5678"), null
         ), testUser.getUserId());
 
-        List<CalendarMemoryResponseDto> result = memoryService.getCalendarMemories(2024, testUser.getUserId());
+        List<CalendarMemoryResponseDto> result = memoryService.getCalendarMemories(2024, null, testUser.getUserId());
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting("title")

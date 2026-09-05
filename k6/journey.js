@@ -296,7 +296,9 @@ function viewInvitations(me) {
 }
 
 function viewCalendar(me) {
-  const res = http.get(`${BASE_URL}/api/calendar/memories?year=2024`, {
+  // 화면이 한 달씩 보여주므로 달을 고정해서 부른다. 시드가 하루에 하나씩 뿌려져 있어
+  // 어느 달을 잡아도 지도당 최대 31건으로 같다 (연도 전체는 최대 135건이었다)
+  const res = http.get(`${BASE_URL}/api/calendar/memories?year=2024&month=3`, {
     headers: me.h,
     tags: tag('GET_calendar'),
   });

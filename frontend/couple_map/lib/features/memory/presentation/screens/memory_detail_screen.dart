@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../auth/domain/providers/auth_provider.dart';
+import '../../../calendar/domain/providers/calendar_provider.dart';
 import '../../data/models/memory_model.dart';
 import '../../domain/providers/memory_provider.dart';
 import '../widgets/audio_player_widget.dart';
@@ -81,6 +82,7 @@ class _MemoryDetailOverlayState extends ConsumerState<_MemoryDetailOverlay> {
         widget.mapId,
         widget.memoryId,
       );
+      invalidateCalendar(ref);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
