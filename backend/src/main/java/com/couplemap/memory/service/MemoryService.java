@@ -21,7 +21,7 @@ public interface MemoryService {
     MemoryDetailResponseDto getMemoryDetail(Long mapId, Long memoryId, Long userId);
     void deleteMemory(Long mapId, Long memoryId, Long userId);
     Long updateMemory(Long mapId, Long memoryId, UpdateMemoryRequestDto request, Long userId);
-    List<CalendarMemoryResponseDto> getCalendarMemories(int year, Long userId);
+    List<CalendarMemoryResponseDto> getCalendarMemories(int year, Integer month, Long userId);
     UploadUrlResponseDto issueUploadUrls(Long mapId, UploadUrlRequestDto request, Long userId);
     Long completeUpload(Long mapId, CompleteUploadRequestDto request, Long userId);
 }

@@ -336,10 +336,15 @@ public class MemoryServiceImpl implements MemoryService {
     }
 
     @Override
-    public List<CalendarMemoryResponseDto> getCalendarMemories(int year, Long userId) {
+    public List<CalendarMemoryResponseDto> getCalendarMemories(int year, Integer month, Long userId) {
+        if (month != null && (month < 1 || month > 12)) {
+            throw new MemoryException(INVALID_MONTH);
+        }
+
         // 컬럼에 YEAR()를 씌우면 인덱스를 못 타므로 범위로 바꿔서 넘긴다
-        LocalDate from = LocalDate.of(year, 1, 1);
-        LocalDate to = LocalDate.of(year, 12, 31);
+        // month가 있으면 그 달만 — 화면이 한 달씩 보여주는데 연도 전체를 만들면 응답 대부분이 버려진다
+        LocalDate from = (month == null) ? LocalDate.of(year, 1, 1) : LocalDate.of(year, month, 1);
+        LocalDate to = (month == null) ? LocalDate.of(year, 12, 31) : from.withDayOfMonth(from.lengthOfMonth());
         List<Memory> memories = memoryRepository.findAllByUserIdAndYear(userId, from, to, List.of(OWNER, EDITOR));
 
         List<Long> memoryIds = memories.stream().map(Memory::getMemoryId).collect(Collectors.toList());
