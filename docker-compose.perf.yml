@@ -1,0 +1,63 @@
+name: vestige
+
+# 성능 테스트 전용 Docker Compose
+# 모니터링 스택 (Prometheus + Grafana) + Redis
+# Spring Boot는 로컬(IDE/CLI)에서 직접 실행
+
+services:
+
+  # ── Redis (Spring Boot 캐시·세션) ──────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── Prometheus (Spring Boot 스크랩 + k6 Remote Write) ────
+  prometheus:
+    image: prom/prometheus:v3.10.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=24h"
+      - "--web.enable-remote-write-receiver"
+
+  # ── Grafana 렌더러 (패널/대시보드 PNG export용, 별도 컨테이너) ──
+  renderer:
+    image: grafana/grafana-image-renderer:3.10.3
+    expose:
+      - "8081"
+
+  # ── Grafana (대시보드) ────────────────────────────────────
+  grafana:
+    image: grafana/grafana:12.4.1
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      # 렌더 API를 인증 없이 쓰려고 켠다. 로컬 성능 대시보드 전용
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    depends_on:
+      - prometheus
+      - renderer
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./prometheus/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./prometheus/grafana-dashboard.json:/var/lib/grafana/dashboards/vestige-load-test.json:ro
+
+volumes:
+  prometheus_data:
+  grafana_data:

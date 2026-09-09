@@ -176,9 +176,8 @@ class _MapDetailScreenState extends ConsumerState<MapDetailScreen> {
     try {
       final auth = ref.read(authProvider);
       if (auth is! AuthSuccess) return;
-      final accessToken = auth.token.accessToken;
 
-      final memories = await ref.read(memoryRepositoryProvider).getMemoryMarkers(accessToken, widget.mapId);
+      final memories = await ref.read(memoryRepositoryProvider).getMemoryMarkers(widget.mapId);
 
       if (!mounted) return;
 

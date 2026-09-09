@@ -59,6 +59,8 @@ jobs:
             docker compose up -d --no-deps app
             docker image prune -f
             for i in $(seq 1 10); do
-              curl -sf http://localhost:8080/actuator/health && break
+              curl -sf http://localhost:8080/actuator/health && exit 0
               sleep 5
             done
+            echo "헬스체크 실패 - 앱이 뜨지 않았습니다"
+            exit 1

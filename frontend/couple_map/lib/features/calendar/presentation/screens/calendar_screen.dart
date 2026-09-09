@@ -17,8 +17,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
   DateTime _selectedDate = DateTime.now();
 
-  // 날짜 키 → 추억 리스트
-  Map<String, List<CalendarMemory>> _memoryMap = {};
+  // 날짜 키 → 추억 리스트. 넘겨본 달이 쌓인다
+  final Map<String, List<CalendarMemory>> _memoryMap = {};
+  // 응답을 받은 달. "아직 안 받음"과 "추억이 없음"을 구분하는 데 쓴다
+  final Set<String> _loadedMonths = {};
   bool _isLoading = true;
 
   static const _categoryIcons = {
@@ -58,6 +60,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Future<void> _loadMemories({bool forceRefresh = false}) async {
+    final year = _currentMonth.year;
+    final month = _currentMonth.month;
     setState(() => _isLoading = true);
     try {
       final token = await _getToken();
@@ -65,8 +69,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
       final calendarRepo = ref.read(calendarRepositoryProvider);
       final memories = await calendarRepo.getCalendarMemories(
-        token,
-        _currentMonth.year,
+        year,
+        month,
         forceRefresh: forceRefresh,
       );
 
@@ -79,7 +83,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
       if (mounted) {
         setState(() {
-          _memoryMap = newMap;
+          // 이번에 받은 달의 날짜만 갈아끼우고 다른 달은 남긴다. 이미 본 달로 돌아갈 때
+          // 다시 기다리지 않고, 빠르게 넘겨 응답 순서가 뒤바뀌어도 서로를 덮지 않는다
+          final prefix = _monthPrefix(year, month);
+          _memoryMap.removeWhere((key, _) => key.startsWith(prefix));
+          _memoryMap.addAll(newMap);
+          _loadedMonths.add(CalendarRepository.cacheKey(year, month));
           _isLoading = false;
         });
       }
@@ -87,6 +96,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  String _monthPrefix(int year, int month) =>
+      '$year-${month.toString().padLeft(2, '0')}';
+
+  bool get _isCurrentMonthLoaded => _loadedMonths
+      .contains(CalendarRepository.cacheKey(_currentMonth.year, _currentMonth.month));
 
   String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -115,22 +130,31 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       _currentMonth.year,
       _currentMonth.month + delta,
     );
-    final yearChanged = newMonth.year != _currentMonth.year;
     setState(() {
       _currentMonth = newMonth;
       _selectedDate = DateTime(newMonth.year, newMonth.month, 1);
     });
-    if (yearChanged) {
-      _loadMemories();
-    }
+    // 달마다 따로 받으므로 연도가 그대로여도 다시 받는다.
+    // 이미 받은 달이면 리포지토리 캐시에서 바로 돌아온다
+    _loadMemories();
   }
 
   @override
   Widget build(BuildContext context) {
+    // 추억이 바뀌면 들고 있던 데이터를 버리고 지금 보고 있는 달을 다시 받는다
+    ref.listen<int>(calendarVersionProvider, (_, __) {
+      _memoryMap.clear();
+      _loadedMonths.clear();
+      _loadMemories(forceRefresh: true);
+    });
+
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
       body: SafeArea(
-        child: _isLoading
+        // 첫 진입에만 스피너를 띄운다. 월을 넘길 때마다 화면 전체가 사라졌다 돌아오면
+        // 응답이 빨라도 깜빡임이 보인다. 그리드는 날짜 계산만으로 그릴 수 있으므로
+        // 먼저 그려두고 점만 나중에 채운다
+        child: _isLoading && _memoryMap.isEmpty
             ? const Center(
                 child: CircularProgressIndicator(color: Color(0xFFFF8E8E)),
               )
@@ -419,7 +443,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        if (entries.isEmpty)
+        // 아직 응답이 안 온 달에 "추억이 없어요"를 띄우면, 곧 타일로 바뀌면서 높이가 출렁인다.
+        // 받기 전에는 비워두고 한 번에 그린다
+        if (!_isCurrentMonthLoaded)
+          const SizedBox.shrink()
+        else if (entries.isEmpty)
           _buildEmptyMemory()
         else
           ...entries.map((e) => _buildMemoryTile(e)),

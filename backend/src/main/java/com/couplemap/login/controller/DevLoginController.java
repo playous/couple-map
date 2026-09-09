@@ -20,12 +20,12 @@ public class DevLoginController {
     private final UserRepository userRepository;
     private final AuthTokenService authTokenService;
 
-    @PostMapping("/login")
-    public ResponseEntity<ApiResponse<LoginTokenResponseDto>> devLogin() {
+    @PostMapping("/login/{providerId}")
+    public ResponseEntity<ApiResponse<LoginTokenResponseDto>> devLogin(@PathVariable String providerId) {
 
-        User user = userRepository.findByProviderId("dev-test-user");
+        User user = userRepository.findByProviderId(providerId);
 
-        if (user == null) throw new RuntimeException("테스트 유저 없음");
+        if (user == null) throw new RuntimeException("테스트 유저 없음: " + providerId);
 
         LoginTokenResponseDto tokens = authTokenService.generateTokens(
                 user.getUserId(),

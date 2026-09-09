@@ -5,9 +5,7 @@ import '../../../../common/widgets/app_bar_widget.dart';
 import '../../../../common/widgets/primary_button.dart';
 
 class TermsScreen extends StatefulWidget {
-  final String accessToken;
-
-  const TermsScreen({super.key, required this.accessToken});
+  const TermsScreen({super.key});
 
   @override
   State<TermsScreen> createState() => _TermsScreenState();
@@ -38,7 +36,7 @@ class _TermsScreenState extends State<TermsScreen> {
 
   void _onNext() {
     if (!_canProceed) return;
-    context.go('/profile-setup', extra: widget.accessToken);
+    context.go('/profile-setup');
   }
 
   @override

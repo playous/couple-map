@@ -5,6 +5,8 @@ import com.couplemap.map.domain.MapMemberRole;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+import java.util.function.Function;
+
 @Getter
 @RequiredArgsConstructor
 public class MapMemberDto {
@@ -13,11 +15,11 @@ public class MapMemberDto {
     private final String profileImageUrl;
     private final MapMemberRole role;
 
-    public static MapMemberDto from(MapMember mapMember) {
+    public static MapMemberDto from(MapMember mapMember, Function<String, String> urlOf) {
         return new MapMemberDto(
                 mapMember.getUser().getUserId(),
                 mapMember.getUser().getNickname(),
-                mapMember.getUser().getProfileImageUrl(),
+                urlOf.apply(mapMember.getUser().getProfileImageKey()),
                 mapMember.getMapMemberRole()
         );
     }

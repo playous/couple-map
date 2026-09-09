@@ -1,6 +1,6 @@
 spring:
   application:
-    name: couplemap
+    name: vestige
   profiles:
     default: dev
 
@@ -73,6 +73,7 @@ spring:
         secret-key: ${S3_SECRET_KEY}
       s3:
         bucket: ${S3_BUCKET_NAME}
+        key-prefix: ${S3_KEY_PREFIX:}
       region:
         static: ap-northeast-2
       stack:
@@ -81,9 +82,17 @@ spring:
   # Multipart
   servlet:
     multipart:
-      max-file-size: 5MB
+      max-file-size: 100MB
       max-request-size: 110MB
 
+
+# Upload
+upload:
+  presign:
+    put-ttl: 10m
+    get-ttl: 30m
+  session-ttl: 1h
+  orphan-grace: 1h
 
 # File Cleanup
 file-cleanup:
@@ -94,13 +103,16 @@ file-cleanup:
 server:
   address: 0.0.0.0
   port: 8080
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 
 # Monitoring - Prometheus & Grafana
 management:
   metrics:
     tags:
-      application: couplemap
+      application: vestige
     distribution:
       percentiles-histogram:
         http.server.requests: true

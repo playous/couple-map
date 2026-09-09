@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../auth/domain/providers/auth_provider.dart';
+import '../../../calendar/domain/providers/calendar_provider.dart';
 import '../../data/models/memory_model.dart';
 import '../../domain/providers/memory_provider.dart';
 
@@ -76,7 +77,6 @@ class _MemoryEditScreenState extends ConsumerState<MemoryEditScreen> {
     if (auth is! AuthSuccess) return;
     try {
       final memory = await ref.read(memoryRepositoryProvider).getMemoryDetail(
-        auth.token.accessToken,
         widget.mapId,
         widget.memoryId,
       );
@@ -198,12 +198,12 @@ class _MemoryEditScreenState extends ConsumerState<MemoryEditScreen> {
       ];
 
       await ref.read(memoryRepositoryProvider).updateMemory(
-        auth.token.accessToken,
         widget.mapId,
         widget.memoryId,
         requestData,
         allNewFiles.isNotEmpty ? allNewFiles : null,
       );
+      invalidateCalendar(ref);
       if (mounted) context.pop(true);
     } catch (e) {
       if (mounted) {

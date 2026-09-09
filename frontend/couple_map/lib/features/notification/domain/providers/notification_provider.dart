@@ -9,10 +9,10 @@ class NotificationNotifier extends AsyncNotifier<List<NotificationModel>> {
   @override
   Future<List<NotificationModel>> build() async => [];
 
-  Future<void> load(String accessToken) async {
+  Future<void> load() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(
-      () => ref.read(notificationRepositoryProvider).getNotifications(accessToken),
+      () => ref.read(notificationRepositoryProvider).getNotifications(),
     );
   }
 

@@ -117,7 +117,6 @@ class MemorySummary {
 
 class MemoryMarker {
   final int memoryId;
-  final String title;
   final String? category;
   final double latitude;
   final double longitude;
@@ -125,7 +124,6 @@ class MemoryMarker {
 
   const MemoryMarker({
     required this.memoryId,
-    required this.title,
     this.category,
     required this.latitude,
     required this.longitude,
@@ -135,7 +133,6 @@ class MemoryMarker {
   factory MemoryMarker.fromJson(Map<String, dynamic> json) {
     return MemoryMarker(
       memoryId: json['memoryId'] as int,
-      title: json['title'] as String,
       category: json['category'] as String?,
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),

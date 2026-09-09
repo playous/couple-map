@@ -1,7 +1,6 @@
 package com.couplemap.global.exception;
 
 import com.couplemap.global.exception.code.DtoErrorCode;
-import com.couplemap.global.exception.code.UserErrorCode;
 import com.couplemap.global.exception.exceptions.BaseException;
 import com.couplemap.global.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +19,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BaseException.class)
     public ResponseEntity<ApiResponse<Void>> handleBaseException(BaseException e) {
-        log.error("BaseException: {} - {}", e.getCode().getCodeName(), e.getMessage(), e);
+        if (e.getCode().getHttpStatus().is5xxServerError()) {
+            log.error("BaseException: {} - {}", e.getCode().getCodeName(), e.getMessage(), e);
+        } else {
+            log.warn("BaseException: {} - {}", e.getCode().getCodeName(), e.getMessage());
+        }
         return ResponseEntity
                 .status(e.getCode().getHttpStatus())
                 .body(ApiResponse.fail(e.getCode()));

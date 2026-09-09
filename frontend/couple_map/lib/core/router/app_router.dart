@@ -48,21 +48,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/tutorial',
-        builder: (_, state) => TutorialScreen(
-          accessToken: state.extra as String,
-        ),
+        builder: (_, __) => const TutorialScreen(),
       ),
       GoRoute(
         path: '/terms',
-        builder: (_, state) => TermsScreen(
-          accessToken: state.extra as String,
-        ),
+        builder: (_, __) => const TermsScreen(),
       ),
       GoRoute(
         path: '/profile-setup',
-        builder: (_, state) => ProfileSetupScreen(
-          accessToken: state.extra as String,
-        ),
+        builder: (_, __) => const ProfileSetupScreen(),
       ),
 
       // ── 홈 ──
@@ -74,9 +68,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── 알림 ──
       GoRoute(
         path: '/notifications',
-        builder: (_, state) => NotificationScreen(
-          accessToken: state.extra as String,
-        ),
+        builder: (_, __) => const NotificationScreen(),
       ),
 
       // ── 지도 ──

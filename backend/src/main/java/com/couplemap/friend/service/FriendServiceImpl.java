@@ -8,6 +8,7 @@ import com.couplemap.friend.dto.SendFriendRequestDto;
 import com.couplemap.friend.repository.FriendshipRepository;
 import com.couplemap.global.exception.exceptions.FriendException;
 import com.couplemap.global.exception.exceptions.UserException;
+import com.couplemap.global.s3.S3Service;
 import com.couplemap.user.domain.User;
 import com.couplemap.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class FriendServiceImpl implements FriendService {
 
     private final FriendshipRepository friendshipRepository;
     private final UserRepository userRepository;
+    private final S3Service s3Service;
 
     @Transactional
     public FriendRequestResponseDto sendFriendRequest(SendFriendRequestDto sendFriendRequestDto, Long requesterId) {
@@ -61,13 +63,13 @@ public class FriendServiceImpl implements FriendService {
         friendList.addAll(friendshipRepository.findFriendsWhereReceiver(userId, ACCEPTED));
         friendList.addAll(friendshipRepository.findFriendsWhereRequester(userId, ACCEPTED));
 
-        return FriendListResponseDto.from(friendList);
+        return FriendListResponseDto.from(friendList, s3Service::getFileUrl);
     }
 
     public FriendPendingListResponseDto getFriendPendingList(Long userId) {
         List<Friendship> friendList = new ArrayList<>();
         friendList.addAll(friendshipRepository.findFriendshipsWhereReceiver(userId, PENDING));
-        return FriendPendingListResponseDto.from(friendList);
+        return FriendPendingListResponseDto.from(friendList, s3Service::getFileUrl);
     }
 
 

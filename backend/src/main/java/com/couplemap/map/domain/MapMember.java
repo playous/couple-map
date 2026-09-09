@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "map_members",  uniqueConstraints = @UniqueConstraint(columnNames = {"map_id", "user_id"}))
+@Table(name = "map_members", uniqueConstraints = @UniqueConstraint(name = "uk_map_members_map_user", columnNames = {"map_id", "user_id"}))
 public class MapMember extends BaseEntity {
 
     @Id
@@ -20,15 +20,15 @@ public class MapMember extends BaseEntity {
     private Long mapMemberId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "map_id", nullable = false)
+    @JoinColumn(name = "map_id", nullable = false, foreignKey = @ForeignKey(name = "fk_map_members_map"))
     private Map map;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_map_members_user"))
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "inviter_id")
+    @JoinColumn(name = "inviter_id", foreignKey = @ForeignKey(name = "fk_map_members_inviter"))
     private User inviter;
 
     @Enumerated(EnumType.STRING)

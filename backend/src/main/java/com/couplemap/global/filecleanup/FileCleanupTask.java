@@ -11,8 +11,13 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+// file_key 인덱스가 없으면 업로드 완료 시의 예약 취소 DELETE가 조건에 맞는 행을 전부 훑으며
+// 다른 요청의 행까지 잠가 데드락이 난다
 @Table(name = "file_cleanup_task",
-        indexes = @Index(name = "idx_cleanup_status", columnList = "status")
+        indexes = {
+                @Index(name = "idx_cleanup_status", columnList = "status"),
+                @Index(name = "idx_cleanup_file_key", columnList = "file_key")
+        }
 )
 
 public class FileCleanupTask {
@@ -53,6 +58,13 @@ public class FileCleanupTask {
         return FileCleanupTask.builder()
                 .fileKey(fileKey)
                 .build();
+    }
+
+    // 발급 직후 등록해 두고 완료 통보가 오면 취소한다. 안 오면 유예 시간 뒤 배치가 회수한다
+    public static FileCleanupTask ofPendingUpload(String fileKey, LocalDateTime cleanupAfter) {
+        FileCleanupTask task = new FileCleanupTask(fileKey);
+        task.nextRetryAt = cleanupAfter;
+        return task;
     }
 
     public void markDone() {

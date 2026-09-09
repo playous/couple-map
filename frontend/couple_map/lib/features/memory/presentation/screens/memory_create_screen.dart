@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../auth/domain/providers/auth_provider.dart';
+import '../../../calendar/domain/providers/calendar_provider.dart';
 import '../../domain/providers/memory_provider.dart';
 
 class MemoryCreateScreen extends ConsumerStatefulWidget {
@@ -255,11 +256,11 @@ class _MemoryCreateScreenState extends ConsumerState<MemoryCreateScreen> {
         ..._selectedAudio,
       ];
       await ref.read(memoryRepositoryProvider).createMemory(
-        auth.token.accessToken,
         widget.mapId,
         requestData,
         allFiles.isNotEmpty ? allFiles : null,
       );
+      invalidateCalendar(ref);
       if (mounted) {
         context.pop(true);
       }

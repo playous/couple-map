@@ -7,9 +7,7 @@ import '../../../../common/widgets/primary_button.dart';
 import '../../domain/providers/auth_provider.dart';
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
-  final String accessToken;
-
-  const ProfileSetupScreen({super.key, required this.accessToken});
+  const ProfileSetupScreen({super.key});
 
   @override
   ConsumerState<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
@@ -40,7 +38,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     try {
       await ref
           .read(authRepositoryProvider)
-          .setNickname(widget.accessToken, _nicknameController.text.trim());
+          .setNickname(_nicknameController.text.trim());
       if (mounted) {
         context.go('/home');
       }

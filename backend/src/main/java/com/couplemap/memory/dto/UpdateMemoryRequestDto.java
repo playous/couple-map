@@ -32,4 +32,8 @@ public class UpdateMemoryRequestDto {
 
     // 삭제할 기존 파일의 ID 목록
     private List<Long> deleteFileIds;
+
+    // 파일을 추가할 때만 채운다. /uploads로 발급받아 S3에 올린 뒤 전달
+    private String uploadId;
+    private List<CompleteUploadRequestDto.FileRef> files;
 }

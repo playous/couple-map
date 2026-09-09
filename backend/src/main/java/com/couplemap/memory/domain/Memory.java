@@ -17,7 +17,10 @@ import java.time.LocalDate;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "memories")
+// 커버링 인덱스 하나로 캘린더(map_id, memory_date 접두사 range)와 마커(전 컬럼 커버)를 함께 처리한다
+@Table(name = "memories", indexes =
+        @Index(name = "idx_memories_map_date_covering",
+                columnList = "map_id, memory_date, memory_id, latitude, longitude, category"))
 public class Memory extends BaseEntity {
 
     @Id
@@ -26,11 +29,11 @@ public class Memory extends BaseEntity {
     private Long memoryId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "map_id", nullable = false)
+    @JoinColumn(name = "map_id", nullable = false, foreignKey = @ForeignKey(name = "fk_memories_map"))
     private Map map;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_memories_user"))
     private User user;
 
     @Column(name = "title", nullable = false, length = 50)

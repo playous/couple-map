@@ -23,12 +23,14 @@ public class CalendarController {
 
     private final MemoryService memoryService;
 
-    @Operation(summary = "캘린더 추억 조회", description = "해당 연도의 모든 추억을 조회합니다. 유저가 속한 모든 지도의 추억을 반환합니다.")
+    @Operation(summary = "캘린더 추억 조회",
+            description = "유저가 속한 모든 지도의 추억을 조회합니다. month를 주면 해당 월만, 생략하면 연도 전체를 반환합니다.")
     @GetMapping("/memories")
     public ResponseEntity<ApiResponse<List<CalendarMemoryResponseDto>>> getCalendarMemories(
             @RequestParam int year,
+            @RequestParam(required = false) Integer month,
             @AuthenticationPrincipal(expression = "userId") Long userId) {
-        List<CalendarMemoryResponseDto> memories = memoryService.getCalendarMemories(year, userId);
+        List<CalendarMemoryResponseDto> memories = memoryService.getCalendarMemories(year, month, userId);
         return ResponseEntity.ok(ApiResponse.success(memories, "캘린더 추억 조회가 완료되었습니다."));
     }
 }

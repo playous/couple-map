@@ -72,20 +72,22 @@ class DioClient {
       headers: {'Content-Type': 'application/json'},
     ),
   )..interceptors.add(InterceptorsWrapper(
-      // ── 요청 전: 만료 5분 전이면 미리 refresh ──
+      // ── 요청 전: storage의 토큰을 단일 출처로 주입 + 만료 5분 전이면 미리 refresh ──
       onRequest: (options, handler) async {
-        final authHeader = options.headers['Authorization'] as String?;
-        if (authHeader == null || !authHeader.startsWith('Bearer ')) {
+        // 로그인 엔드포인트는 인증 토큰이 필요 없으므로 건너뛴다.
+        if (options.path.contains('/api/login/')) {
           return handler.next(options);
         }
 
-        final token = authHeader.substring(7);
-        if (!_isExpiringSoon(token)) return handler.next(options);
+        var token = await _storage.read(key: 'accessToken');
+        if (token == null || token.isEmpty) return handler.next(options);
 
-        try {
-          final newToken = await _refreshGate();
-          options.headers['Authorization'] = 'Bearer $newToken';
-        } catch (_) {}
+        if (_isExpiringSoon(token)) {
+          try {
+            token = await _refreshGate();
+          } catch (_) {}
+        }
+        options.headers['Authorization'] = 'Bearer $token';
         return handler.next(options);
       },
 
@@ -125,8 +127,4 @@ class DioClient {
     }
     return '네트워크 연결을 확인해주세요.';
   }
-
-  static Options authOptions(String accessToken) => Options(
-        headers: {'Authorization': 'Bearer $accessToken'},
-      );
 }

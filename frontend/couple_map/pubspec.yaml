@@ -99,6 +99,7 @@ flutter:
     - assets/fonts/
     - assets/images/covers/
     - assets/markers/
+    - assets/icons/
 
   fonts:
     - family: Gaegu
